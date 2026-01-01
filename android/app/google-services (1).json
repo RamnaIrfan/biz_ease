@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "275372109714",
+    "project_id": "bizease-fe390",
+    "storage_bucket": "bizease-fe390.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:275372109714:android:44952d1604869d9cb8db4b",
+        "android_client_info": {
+          "package_name": "com.bizeaze.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDe0yTzcW_-BZxbYXnAwtVFlW28FLoyLqQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:275372109714:android:1ee2c63a0d69d9f3b8db4b",
+        "android_client_info": {
+          "package_name": "com.example.biz_ease"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDe0yTzcW_-BZxbYXnAwtVFlW28FLoyLqQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
