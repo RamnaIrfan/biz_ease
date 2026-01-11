@@ -11,6 +11,7 @@ import 'screens/auth_provider.dart';
 import 'screens/cart_provider.dart';
 import 'screens/wishlist_provider.dart';
 import 'screens/order_provider.dart';
+import 'screens/recent_provider.dart';
 import 'screens/splash_screen.dart';
 import 'screens/welcome_page.dart';
 import 'screens/login_customer.dart'; // ADD THIS IMPORT
@@ -38,6 +39,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => WishlistProvider()),
         ChangeNotifierProvider(create: (_) => OrderProvider()),
+        ChangeNotifierProvider(create: (_) => RecentProvider()),
       ],
       child: MaterialApp(
         title: 'biZEase',

@@ -14,6 +14,7 @@ import '../models/product_model.dart';
 import '../services/product_service.dart';
 import 'package:intl/intl.dart';
 import '../widgets/common_image.dart';
+import 'recent_provider.dart';
 
 // Remove this import since we're not using OrderPage from home
 // import 'order_page.dart';
@@ -30,12 +31,17 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String? _selectedCategory;
+  bool _isShowingFlashSale = false;
+  bool _isShowingRecent = false;
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _categoriesKey = GlobalKey();
   
   // Removed hardcoded _allProducts
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -63,7 +69,7 @@ class _HomePageState extends State<HomePage> {
           children: [
             _buildHeader(),
             Expanded(
-              child: (_searchQuery.isNotEmpty || _selectedCategory != null)
+              child: (_searchQuery.isNotEmpty || _selectedCategory != null || _isShowingFlashSale || _isShowingRecent)
                   ? _buildSearchResults() 
                   : _buildHomeContent(),
             ),
@@ -136,6 +142,16 @@ class _HomePageState extends State<HomePage> {
                 _searchController.text = '';
                 _searchQuery = '';
                 _selectedCategory = null;
+                _isShowingFlashSale = false;
+                _isShowingRecent = false;
+              });
+              
+              // Scroll to categories after a short delay to allow UI to rebuild if needed
+              Future.delayed(const Duration(milliseconds: 100), () {
+                final context = _categoriesKey.currentContext;
+                if (context != null) {
+                  Scrollable.ensureVisible(context, duration: const Duration(seconds: 1), curve: Curves.easeInOut);
+                }
               });
             }
             break;
@@ -282,6 +298,8 @@ class _HomePageState extends State<HomePage> {
                       setState(() {
                         _searchController.clear();
                         _searchQuery = '';
+                        _isShowingFlashSale = false;
+                        _isShowingRecent = false;
                       });
                     },
                   ),
@@ -294,13 +312,26 @@ class _HomePageState extends State<HomePage> {
   }
 
 Widget _buildSearchResults() {
-  String title = _selectedCategory != null 
-      ? 'Category: $_selectedCategory' 
-      : 'Search Results';
+  String title = _isShowingRecent
+      ? 'Recently Viewed'
+      : _isShowingFlashSale
+          ? 'Flash Sale - 50% OFF'
+          : _selectedCategory != null 
+              ? 'Category: $_selectedCategory' 
+              : 'Search Results';
       
-  Stream<List<ProductModel>> stream = _selectedCategory != null 
-      ? ProductService().getProductsByCategory(_selectedCategory!)
-      : ProductService().searchProducts(_searchQuery);
+  Stream<List<ProductModel>> stream;
+  if (_isShowingRecent) {
+    // For "Recent", we don't need a stream since it's in memory, but to keep UI consistent:
+    final recentProducts = Provider.of<RecentProvider>(context, listen: false).recentProducts;
+    stream = Stream.value(recentProducts);
+  } else if (_isShowingFlashSale) {
+    stream = ProductService().getAllProducts();
+  } else if (_selectedCategory != null) {
+    stream = ProductService().getProductsByCategory(_selectedCategory!);
+  } else {
+    stream = ProductService().searchProducts(_searchQuery);
+  }
 
   return StreamBuilder<List<ProductModel>>(
     stream: stream,
@@ -311,7 +342,11 @@ Widget _buildSearchResults() {
       if (snapshot.hasError) {
         return Center(child: Text("Error: ${snapshot.error}"));
       }
-      final products = snapshot.data ?? [];
+      List<ProductModel> products = snapshot.data ?? [];
+
+      if (_isShowingFlashSale) {
+        products = products.take(10).toList();
+      }
 
       if (products.isEmpty) {
         return Center(
@@ -336,6 +371,8 @@ Widget _buildSearchResults() {
                     _searchController.clear();
                     _searchQuery = '';
                     _selectedCategory = null;
+                    _isShowingFlashSale = false;
+                    _isShowingRecent = false;
                   });
                 },
                 style: ElevatedButton.styleFrom(
@@ -372,6 +409,8 @@ Widget _buildSearchResults() {
                       _searchController.clear();
                       _searchQuery = '';
                       _selectedCategory = null;
+                      _isShowingFlashSale = false;
+                      _isShowingRecent = false;
                     });
                   },
                 ),
@@ -389,7 +428,7 @@ Widget _buildSearchResults() {
               ),
               itemCount: products.length,
               itemBuilder: (context, index) {
-                return _buildProductCard(products[index]);
+                return _buildProductCard(products[index], isDiscounted: _isShowingFlashSale);
               },
             ),
           ),
@@ -401,6 +440,7 @@ Widget _buildSearchResults() {
 
   Widget _buildHomeContent() {
     return SingleChildScrollView(
+      controller: _scrollController,
       child: Column(
         children: [
           const Padding(
@@ -426,19 +466,30 @@ Widget _buildSearchResults() {
   Widget _buildBanner() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          height: 140,
-          color: primaryColor,
-          child: const Center(
-            child: Text(
-              "FLASH SALE\nUP TO 70% OFF",
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _isShowingFlashSale = true;
+            _isShowingRecent = false;
+            _selectedCategory = null;
+            _searchQuery = '';
+            _searchController.clear();
+          });
+        },
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            height: 140,
+            color: primaryColor,
+            child: const Center(
+              child: Text(
+                "FLASH SALE\nUP TO 50% OFF",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
@@ -458,6 +509,7 @@ Widget _buildSearchResults() {
     ];
 
     return Padding(
+      key: _categoriesKey,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -479,6 +531,8 @@ Widget _buildSearchResults() {
                     setState(() {
                       _selectedCategory = category['name'] as String;
                       _searchQuery = '';
+                      _isShowingFlashSale = false;
+                      _isShowingRecent = false;
                       _searchController.clear();
                     }); 
                   },
@@ -536,16 +590,47 @@ Widget _buildSearchResults() {
               );
             },
           ),
-          _QuickCard(
-            icon: Icons.history,
-            title: "Recent",
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Recently viewed')),
-              );
+              setState(() {
+                _isShowingRecent = true;
+                _isShowingFlashSale = false;
+                _selectedCategory = null;
+                _searchQuery = '';
+                _searchController.clear();
+              });
             },
           ),
         ],
+      ),
+    );
+  }
+
+  void _showSuccessDialog(String message, IconData icon) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: primaryColor, size: 60),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+              ),
+              child: const Text('OK', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -578,21 +663,14 @@ Widget _buildSearchResults() {
 
                 // Simple logic to split products to avoid duplicates in UI
                 // Flash sale gets first half (or filtered), Recommended gets second half
+                // Show 10 items for Flash sale, other half for Recommended
                 List<ProductModel> productsToShow;
-                if (allProducts.length > 1) {
-                   int mid = (allProducts.length / 2).ceil();
-                   if (isFlashSale) {
-                     productsToShow = allProducts.take(mid).toList();
-                   } else {
-                     productsToShow = allProducts.skip(mid).toList();
-                   }
+                if (isFlashSale) {
+                  productsToShow = allProducts.take(10).toList();
                 } else {
-                  // If only 1 product, show it in Flash sale only
-                  if (isFlashSale) {
-                    productsToShow = allProducts;
-                  } else {
-                    productsToShow = [];
-                  }
+                  // Skip 10 or just show second half to avoid too much overlap
+                  int skipCount = allProducts.length > 10 ? 10 : (allProducts.length / 2).floor();
+                  productsToShow = allProducts.skip(skipCount).toList();
                 }
                 
                 if (productsToShow.isEmpty) {
@@ -608,7 +686,7 @@ Widget _buildSearchResults() {
                       margin: EdgeInsets.only(
                         right: index == productsToShow.length - 1 ? 0 : 12,
                       ),
-                      child: _buildProductCard(productsToShow[index]),
+                      child: _buildProductCard(productsToShow[index], isDiscounted: isFlashSale),
                     );
                   },
                 );
@@ -620,13 +698,19 @@ Widget _buildSearchResults() {
     );
   }
 
-Widget _buildProductCard(ProductModel product) {
+Widget _buildProductCard(ProductModel product, {bool isDiscounted = false}) {
   final currencyFormat = NumberFormat.currency(symbol: 'Rs. ', decimalDigits: 0);
+  final double displayPrice = isDiscounted ? product.price * 0.5 : product.price;
 
-  return Card(
-    elevation: 2,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    child: ConstrainedBox(
+  return GestureDetector(
+    onTap: () {
+      Provider.of<RecentProvider>(context, listen: false).addProduct(product);
+      // Optional: Add navigation to product details here if created in future
+    },
+    child: Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ConstrainedBox(
       constraints: const BoxConstraints(
         minHeight: 180,
       ),
@@ -677,14 +761,11 @@ Widget _buildProductCard(ProductModel product) {
                         );
                         wishlist.toggleWishlist(item);
 
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(isWishlisted 
-                              ? '${product.name} removed from wishlist' 
-                              : '${product.name} added to wishlist'),
-                            duration: const Duration(seconds: 1),
-                            backgroundColor: isWishlisted ? Colors.red : Colors.green,
-                          ),
+                        _showSuccessDialog(
+                          isWishlisted 
+                            ? '${product.name} removed from wishlist' 
+                            : '${product.name} added to wishlist',
+                          isWishlisted ? Icons.favorite_border : Icons.favorite,
                         );
                       },
                       icon: Icon(
@@ -723,14 +804,45 @@ Widget _buildProductCard(ProductModel product) {
                 ),
                 const SizedBox(height: 4),
                 // Product Price
-                Text(
-                  currencyFormat.format(product.price),
-                  style: const TextStyle(
-                    color: Colors.red,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
+                if (isDiscounted) ...[
+                  Row(
+                    children: [
+                      Text(
+                        currencyFormat.format(product.price),
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          decoration: TextDecoration.lineThrough,
+                          fontSize: 10,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Text(
+                        "50% OFF",
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
+                  Text(
+                    currencyFormat.format(displayPrice),
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ] else
+                  Text(
+                    currencyFormat.format(product.price),
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
                 const SizedBox(height: 8),
                 // Add to Cart Button
                 SizedBox(
@@ -741,18 +853,12 @@ Widget _buildProductCard(ProductModel product) {
                         id: product.id,
                         ownerId: product.ownerId,
                         name: product.name,
-                        price: currencyFormat.format(product.price),
+                        price: currencyFormat.format(displayPrice),
                         image: product.imageUrl ?? '',
                       );
                       final cart = Provider.of<CartProvider>(context, listen: false);
                       cart.addToCart(cartItem);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('${product.name} added to cart'),
-                          backgroundColor: Colors.green,
-                          duration: const Duration(seconds: 1),
-                        ),
-                      );
+                      _showSuccessDialog('${product.name} added to cart', Icons.shopping_cart);
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
