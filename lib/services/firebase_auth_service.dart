@@ -113,4 +113,14 @@ class FirebaseAuthService {
         return 'Authentication error: ${e.message ?? 'Unknown error'}';
     }
   }
+
+  // Update photo URL
+  Future<void> updatePhotoURL(String photoURL) async {
+    try {
+      await _auth.currentUser?.updatePhotoURL(photoURL);
+      await _auth.currentUser?.reload();
+    } catch (e) {
+      throw 'Failed to update profile picture. Please try again.';
+    }
+  }
 }

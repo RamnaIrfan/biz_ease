@@ -1,13 +1,86 @@
 import 'package:flutter/material.dart';
 import '../models/owner_model.dart';
 
-class OwnerProfilePage extends StatelessWidget {
+import 'package:flutter/material.dart';
+import '../models/owner_model.dart';
+import 'business_settings_page.dart';
+
+class OwnerProfilePage extends StatefulWidget {
   final OwnerModel owner;
   const OwnerProfilePage({super.key, required this.owner});
- 
 
+  @override
+  State<OwnerProfilePage> createState() => _OwnerProfilePageState();
+}
 
+class _OwnerProfilePageState extends State<OwnerProfilePage> {
+  late OwnerModel _currentOwner;
   static const orange = Color(0xFFD88A1F);
+
+  @override
+  void initState() {
+    super.initState();
+    _currentOwner = widget.owner;
+  }
+
+  void _showBusinessDetails() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Business Details'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _detailRow('Business Name', _currentOwner.businessName),
+            _detailRow('Category', _currentOwner.category),
+            _detailRow('Owner Name', _currentOwner.fullName),
+            _detailRow('Phone', _currentOwner.phone),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  void _showAddressBook() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Business Address', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: orange)),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.location_on, color: orange),
+              title: Text(_currentOwner.address),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+          const Divider(),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,8 +94,6 @@ class OwnerProfilePage extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-
-
             /// PROFILE CARD
             Container(
               padding: const EdgeInsets.all(16),
@@ -36,7 +107,7 @@ class OwnerProfilePage extends StatelessWidget {
                     radius: 26,
                     backgroundColor: Colors.white,
                     child: Text(
-                      owner.fullName[0],
+                      _currentOwner.fullName[0],
                       style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           color: orange,
@@ -47,11 +118,11 @@ class OwnerProfilePage extends StatelessWidget {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(owner.fullName,
+                      Text(_currentOwner.fullName,
                           style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold)),
-                      Text(owner.businessName,
+                      Text(_currentOwner.businessName,
                           style: const TextStyle(color: Colors.white70)),
                     ],
                   ),
@@ -62,22 +133,28 @@ class OwnerProfilePage extends StatelessWidget {
             const SizedBox(height: 20),
 
             _section("ACCOUNT INFORMATION"),
-            _tile(Icons.email, owner.email),
-            _tile(Icons.phone, owner.phone),
-            _tile(Icons.location_on, owner.address),
+            _tile(Icons.email, _currentOwner.email),
+            _tile(Icons.phone, _currentOwner.phone),
+            _tile(Icons.location_on, _currentOwner.address),
 
             const SizedBox(height: 14),
 
             _section("BUSINESS INFORMATION"),
-            _nav("Address Book"),
-            _nav("Business Details"),
+            _nav("Address Book", onTap: _showAddressBook),
+            _nav("Business Details", onTap: _showBusinessDetails),
 
             const SizedBox(height: 14),
 
             _section("SETTINGS"),
-            _nav("Account Settings"),
-            _nav("Address Book"),
-            _nav("Business Details"),
+            _nav("Account Settings", onTap: () async {
+              final updated = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => BusinessSettingsPage(owner: _currentOwner)),
+              );
+              if (updated != null && updated is OwnerModel) {
+                setState(() => _currentOwner = updated);
+              }
+            }),
 
             const SizedBox(height: 30),
 
@@ -103,9 +180,11 @@ class OwnerProfilePage extends StatelessWidget {
   Widget _section(String text) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: Text(text,
-          style:
-              const TextStyle(color: orange, fontWeight: FontWeight.bold)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(text,
+            style: const TextStyle(color: orange, fontWeight: FontWeight.bold)),
+      ),
     );
   }
 
@@ -116,10 +195,15 @@ class OwnerProfilePage extends StatelessWidget {
     );
   }
 
-  Widget _nav(String text) {
-    return ListTile(
-      title: Text(text),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+  Widget _nav(String text, {VoidCallback? onTap}) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      child: ListTile(
+        title: Text(text),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: onTap,
+      ),
     );
   }
 }

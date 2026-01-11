@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/owner_service.dart';
 import 'owner_dashboard_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginBusinessPage extends StatefulWidget {
   const LoginBusinessPage({super.key});
@@ -16,6 +17,27 @@ class _LoginBusinessPageState extends State<LoginBusinessPage> {
   final TextEditingController passwordController = TextEditingController();
 
   bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedEmail();
+  }
+
+  Future<void> _loadSavedEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedEmail = prefs.getString('saved_business_email');
+    if (savedEmail != null) {
+      setState(() {
+        usernameController.text = savedEmail;
+      });
+    }
+  }
+
+  Future<void> _saveEmail(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('saved_business_email', email);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +104,9 @@ class _LoginBusinessPageState extends State<LoginBusinessPage> {
                   password: password,
                   userType: "business",
                 );
+
+                // Save email for next time
+                await _saveEmail(email);
 
                 // ✅ CHECK IF BUSINESS IS REGISTERED
                 final ownerService = OwnerService();

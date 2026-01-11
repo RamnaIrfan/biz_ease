@@ -37,4 +37,13 @@ class OwnerService {
       return false;
     }
   }
+
+  // Update owner profile
+  Future<void> updateOwner(OwnerModel owner) async {
+    try {
+      await _firestore.collection(_collection).doc(owner.id).update(owner.toMap());
+    } catch (e) {
+      throw 'Failed to update business details: $e';
+    }
+  }
 }

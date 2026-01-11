@@ -2,17 +2,21 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../screens/auth_provider.dart';
-import '../services/product_service.dart';
+import '../services/firebase_auth_service.dart';
+import 'theme_provider.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final orangeColor = const Color(0xFFD88A1F);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
-        backgroundColor: const Color(0xFFD88A1F),
+        backgroundColor: orangeColor,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -21,44 +25,15 @@ class SettingsPage extends StatelessWidget {
             _settingsItem(
               'Dark Mode',
               Icons.dark_mode,
-              trailing: Switch(value: false, onChanged: (value) {}),
+              trailing: Switch(
+                value: themeProvider.isDarkMode,
+                onChanged: (value) => themeProvider.toggleTheme(value),
+              ),
             ),
             _settingsItem(
               'Language',
               Icons.language,
               trailing: const Text('English'),
-            ),
-            _settingsItem(
-              'Theme Color',
-              Icons.palette,
-              trailing: Container(
-                width: 20,
-                height: 20,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFD88A1F),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-          ]),
-          
-          const SizedBox(height: 20),
-          
-          _settingsSection('Notifications', [
-            _settingsItem(
-              'Push Notifications',
-              Icons.notifications,
-              trailing: Switch(value: true, onChanged: (value) {}),
-            ),
-            _settingsItem(
-              'Email Notifications',
-              Icons.email,
-              trailing: Switch(value: true, onChanged: (value) {}),
-            ),
-            _settingsItem(
-              'Order Updates',
-              Icons.shopping_bag,
-              trailing: Switch(value: true, onChanged: (value) {}),
             ),
           ]),
           
@@ -68,22 +43,36 @@ class SettingsPage extends StatelessWidget {
             _settingsItem(
               'Change Password',
               Icons.lock,
-              onTap: () {
-                // Navigate to change password page
+              onTap: () async {
+                final auth = Provider.of<AuthProvider>(context, listen: false);
+                if (auth.email != null) {
+                  try {
+                    await FirebaseAuthService().sendPasswordResetEmail(auth.email!);
+                    if (context.mounted) {
+                      _showInfoDialog(context, 'Reset Email Sent', 'A password reset link has been sent to ${auth.email}. Please check your inbox.');
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                    }
+                  }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please login to change password')));
+                }
               },
             ),
             _settingsItem(
               'Privacy Policy',
               Icons.privacy_tip,
               onTap: () {
-                // Navigate to privacy policy
+                _showInfoDialog(context, 'Privacy Policy', 'At biZEase, we value your privacy. We collect only the data necessary to provide our services, such as your email for account management and address for order delivery. Your data is stored securely in Firebase and is never sold to third parties. For more details, contact our support team.');
               },
             ),
             _settingsItem(
               'Terms of Service',
               Icons.description,
               onTap: () {
-                // Navigate to terms of service
+                _showInfoDialog(context, 'Terms of Service', 'By using biZEase, you agree to our terms. Our platform facilitates transactions between buyers and local business owners. While we ensure service security, we are not responsible for direct quality issues from independent sellers. Users must provide accurate information for reliable order fulfillment.');
               },
             ),
           ]),
@@ -95,201 +84,25 @@ class SettingsPage extends StatelessWidget {
               'Help Center',
               Icons.help,
               onTap: () {
-                // Navigate to help center
+                _showInfoDialog(context, 'Help Center', 'Need help? Check out our FAQs on how to place orders, track your delivery, or contact sellers. If you encounter technical issues, please reach out to our support team via "Contact Us".');
               },
             ),
             _settingsItem(
               'Contact Us',
               Icons.contact_support,
               onTap: () {
-                // Navigate to contact page
+                _showInfoDialog(context, 'Contact Us', 'You can reach biZEase support through the following channels:\n\n📧 Email: support@bizease.com\n📞 Phone: +92 300 1234567\n📍 Office: Sector H-12, Islamabad');
               },
             ),
             _settingsItem(
               'About App',
               Icons.info,
               onTap: () {
-                // Navigate to about page
+                _showInfoDialog(context, 'About App', 'biZEase is a modern platform designed to empower local businesses and simplify shopping for customers. Built using Flutter and Firebase, our mission is to make business development easy and accessible for everyone.');
               },
             ),
           ]),
 
-          const SizedBox(height: 20),
-
-          // Maintenance Section (Only for Business Owners/Logged In users)
-          _settingsSection('Maintenance', [
-            _settingsItem(
-              'Delete All Sample Products',
-              Icons.delete_sweep,
-              onTap: () async {
-                final auth = Provider.of<AuthProvider>(context, listen: false);
-                if (auth.userId == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please login to use this feature')),
-                  );
-                  return;
-                }
-
-                // Confirm deletion
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Delete Sample Products'),
-                    content: const Text(
-                      'This will delete all sample/dummy products from your inventory. This action cannot be undone. Continue?',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  ),
-                );
-
-                if (confirmed != true || !context.mounted) return;
-
-                // Show loading
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (context) => const Center(child: CircularProgressIndicator()),
-                );
-
-                try {
-                  final count = await ProductService().deleteAllSampleProducts(auth.userId!);
-                  if (context.mounted) {
-                    Navigator.pop(context); // Close loader
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Successfully deleted $count sample product${count == 1 ? '' : 's'}'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    Navigator.pop(context); // Close loader
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error: $e')),
-                    );
-                  }
-                }
-              },
-            ),
-            _settingsItem(
-              'Clean Duplicate Products',
-              Icons.cleaning_services,
-              onTap: () async {
-                 // Trigger cleanup
-                 final auth = Provider.of<AuthProvider>(context, listen: false);
-                 if (auth.userId == null) {
-                   ScaffoldMessenger.of(context).showSnackBar(
-                     const SnackBar(content: Text('Please login to use this feature')),
-                   );
-                   return;
-                 }
-
-                showDialog(
-                  context: context,
-                  barrierDismissible: false, 
-                  builder: (context) => const Center(child: CircularProgressIndicator()),
-                );
-
-                 try {
-                   final count = await ProductService().cleanupDuplicates(auth.userId!);
-                   if (context.mounted) {
-                     Navigator. pop(context); // Close loader
-                     ScaffoldMessenger.of(context).showSnackBar(
-                       SnackBar(content: Text('Cleanup complete. Removed $count duplicates.')),
-                     );
-                   }
-                 } catch (e) {
-                   if (context.mounted) {
-                     Navigator.pop(context); // Close loader
-                     ScaffoldMessenger.of(context).showSnackBar(
-                       SnackBar(content: Text('Error: $e')),
-                     );
-                   }
-                 }
-              },
-            ),
-            _settingsItem(
-              'Delete Products by Name',
-              Icons.delete_forever,
-              onTap: () async {
-                final auth = Provider.of<AuthProvider>(context, listen: false);
-                if (auth.userId == null) return;
-
-                final controller = TextEditingController();
-                
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Delete Products'),
-                    content: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('Enter exact product name to delete ALL copies:'),
-                        TextField(
-                          controller: controller,
-                          decoration: const InputDecoration(
-                            hintText: 'e.g., computer',
-                          ),
-                        ),
-                      ],
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () async {
-                          final name = controller.text.trim();
-                          if (name.isEmpty) return;
-                          
-                          Navigator.pop(context); // Close input dialog
-                          
-                          // Show loading
-                          showDialog(
-                            context: context,
-                            barrierDismissible: false,
-                            builder: (context) => const Center(child: CircularProgressIndicator()),
-                          );
-
-                          try {
-                            final count = await ProductService().deleteProductsByName(name, auth.userId!);
-                            if (context.mounted) {
-                              Navigator.pop(context); // Close loading
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Deleted $count products named "$name"')),
-                              );
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              Navigator.pop(context); // Close loading
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Error: $e')),
-                              );
-                            }
-                          }
-                        },
-                        child: const Text('Delete All', style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ]),
-          
-          const SizedBox(height: 30),
-          
           Center(
             child: Text(
               'Version 1.0.0',
@@ -298,6 +111,22 @@ class SettingsPage extends StatelessWidget {
                 fontSize: 12,
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showInfoDialog(BuildContext context, String title, String content) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFD88A1F))),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK', style: TextStyle(color: Color(0xFFD88A1F))),
           ),
         ],
       ),

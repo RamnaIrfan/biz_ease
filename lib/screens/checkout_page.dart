@@ -11,6 +11,7 @@ import '../services/order_service.dart';
 import '../services/product_service.dart';
 import '../widgets/common_image.dart';
 import '../models/order_model.dart';
+import 'notification_provider.dart';
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
@@ -25,7 +26,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _contactController = TextEditingController();
-  String _selectedPaymentMethod = 'Credit Card';
+  String _selectedPaymentMethod = 'Cash on Delivery';
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill email from AuthProvider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      if (authProvider.isLoggedIn) {
+        _emailController.text = authProvider.email;
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -173,6 +186,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             successfulOrders++;
                           }
 
+                          // Trigger notification
+                          if (context.mounted) {
+                            Provider.of<NotificationProvider>(context, listen: false).addNotification(
+                              title: 'Order Placed',
+                              message: 'Order is placed and is pending. Order #${_generateOrderNumber().substring(0, 8)} 🚚',
+                              type: 'order',
+                            );
+                          }
+
                           if (!context.mounted) return;
                           Navigator.pop(context); // Remove loading
 
@@ -277,9 +299,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   Widget _buildPaymentMethods() {
     final List<Map<String, dynamic>> paymentMethods = [
-      {'icon': Icons.credit_card, 'name': 'Credit Card', 'color': Colors.blue},
-      {'icon': Icons.account_balance, 'name': 'Bank Transfer', 'color': Colors.green},
-      {'icon': Icons.paypal, 'name': 'PayPal', 'color': Colors.blueAccent},
       {'icon': Icons.money, 'name': 'Cash on Delivery', 'color': Colors.orange},
     ];
 

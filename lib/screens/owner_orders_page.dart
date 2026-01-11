@@ -4,6 +4,7 @@ import '../models/order_model.dart';
 import '../services/order_service.dart';
 import '../screens/auth_provider.dart';
 import 'package:intl/intl.dart';
+import '../services/notification_service.dart';
 
 class OwnerOrdersPage extends StatelessWidget {
   const OwnerOrdersPage({super.key});
@@ -132,7 +133,15 @@ class _OrderManagementCard extends StatelessWidget {
                           selectedColor: const Color(0xFFD88A1F),
                           onSelected: (selected) {
                             if (selected && !isCurrent) {
-                              OrderService().updateOrderStatus(order.id, status);
+                              OrderService().updateOrderStatus(order.id, status).then((_) {
+                                // Trigger notification for customer
+                                NotificationService().createNotification(
+                                  userId: order.customerId,
+                                  title: 'Order Status Updated',
+                                  message: 'Order #${order.id.substring(0, 8)} is now ${status.name.toUpperCase()}',
+                                  type: 'order',
+                                );
+                              });
                             }
                           },
                         ),

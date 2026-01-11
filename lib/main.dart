@@ -12,6 +12,8 @@ import 'screens/cart_provider.dart';
 import 'screens/wishlist_provider.dart';
 import 'screens/order_provider.dart';
 import 'screens/recent_provider.dart';
+import 'screens/notification_provider.dart';
+import 'screens/theme_provider.dart';
 import 'screens/splash_screen.dart';
 import 'screens/welcome_page.dart';
 import 'screens/login_customer.dart'; // ADD THIS IMPORT
@@ -40,32 +42,48 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => WishlistProvider()),
         ChangeNotifierProvider(create: (_) => OrderProvider()),
         ChangeNotifierProvider(create: (_) => RecentProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
-      child: MaterialApp(
-        title: 'biZEase',
-        theme: ThemeData(
-          primaryColor: const Color(0xFFD88A1F),
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFFD88A1F),
-          ),
-          useMaterial3: true,
-        ),
-        home: const SplashScreen(),
-        routes: {
-          '/welcome': (context) => const WelcomePage(),
-          '/loginBusiness': (context) => const LoginBusinessPage(),
-          '/signupBusiness': (context) => const SignupBusinessPage(),
-          '/registerBusiness': (context) => const RegisterBusinessPage(),
-           '/ownerDashboard': (context) {
-    final owner = ModalRoute.of(context)!.settings.arguments as OwnerModel;
-    return OwnerDashboardPage(owner: owner);
-  },
-          '/home': (context) => const HomePage(),
-          '/loginCustomer': (context) => const LoginCustomerPage(),
-          '/signupCustomer': (context) => const SignupCustomerPage(),
-          '/profile': (context) => const UserProfilePage(),
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, child) {
+          return MaterialApp(
+            title: 'biZEase',
+            themeMode: themeProvider.themeMode,
+            theme: ThemeData(
+              primaryColor: const Color(0xFFD88A1F),
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xFFD88A1F),
+                brightness: Brightness.light,
+              ),
+              useMaterial3: true,
+            ),
+            darkTheme: ThemeData(
+              primaryColor: const Color(0xFFD88A1F),
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xFFD88A1F),
+                brightness: Brightness.dark,
+              ),
+              useMaterial3: true,
+            ),
+            home: const SplashScreen(),
+            routes: {
+              '/welcome': (context) => const WelcomePage(),
+              '/loginBusiness': (context) => const LoginBusinessPage(),
+              '/signupBusiness': (context) => const SignupBusinessPage(),
+              '/registerBusiness': (context) => const RegisterBusinessPage(),
+              '/ownerDashboard': (context) {
+                final owner = ModalRoute.of(context)!.settings.arguments as OwnerModel;
+                return OwnerDashboardPage(owner: owner);
+              },
+              '/home': (context) => const HomePage(),
+              '/loginCustomer': (context) => const LoginCustomerPage(),
+              '/signupCustomer': (context) => const SignupCustomerPage(),
+              '/profile': (context) => const UserProfilePage(),
+            },
+            debugShowCheckedModeBanner: false,
+          );
         },
-        debugShowCheckedModeBanner: false,
       ),
     );
   }

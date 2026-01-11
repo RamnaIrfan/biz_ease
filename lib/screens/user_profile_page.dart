@@ -7,6 +7,7 @@ import 'order_page.dart';
 import 'wishlist_page.dart';
 import 'settings_page.dart';
 import 'wishlist_provider.dart';
+import 'notification_provider.dart';
 import 'order_provider.dart';
 import 'login_customer.dart';
 import 'signup_customer.dart';
@@ -17,8 +18,73 @@ import '../services/product_service.dart';
 import '../widgets/common_image.dart';
 import 'package:intl/intl.dart';
 
-class UserProfilePage extends StatelessWidget {
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:io';
+
+class UserProfilePage extends StatefulWidget {
   const UserProfilePage({super.key});
+
+  @override
+  State<UserProfilePage> createState() => _UserProfilePageState();
+}
+
+class _UserProfilePageState extends State<UserProfilePage> {
+  bool _isUploading = false;
+
+  Future<void> _pickAndUploadImage(AuthProvider authProvider) async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 50,
+      maxWidth: 500,
+    );
+
+    if (image == null) return;
+
+    setState(() {
+      _isUploading = true;
+    });
+
+    try {
+      final userId = authProvider.userId;
+      if (userId == null) return;
+
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('profile_pictures')
+          .child('$userId.jpg');
+
+      await storageRef.putFile(File(image.path));
+      final downloadUrl = await storageRef.getDownloadURL();
+
+      await authProvider.updateProfilePicture(downloadUrl);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile picture updated!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload image: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -191,14 +257,49 @@ class UserProfilePage extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 40,
-                    backgroundColor: const Color(0xFFD88A1F).withAlpha((0.2 * 255).toInt()),
-                    child: const Icon(
-                      Icons.person,
-                      size: 40,
-                      color: Color(0xFFD88A1F),
-                    ),
+                   Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 40,
+                        backgroundColor: const Color(0xFFD88A1F).withAlpha((0.2 * 255).toInt()),
+                        backgroundImage: authProvider.profilePictureUrl != null 
+                            ? NetworkImage(authProvider.profilePictureUrl!) 
+                            : null,
+                        child: authProvider.profilePictureUrl == null 
+                            ? const Icon(
+                                Icons.person,
+                                size: 40,
+                                color: Color(0xFFD88A1F),
+                              )
+                            : null,
+                      ),
+                      if (_isUploading)
+                        const Positioned.fill(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFFD88A1F),
+                            strokeWidth: 2,
+                          ),
+                        ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          onTap: () => _pickAndUploadImage(authProvider),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFD88A1F),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.camera_alt,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -488,6 +589,14 @@ class UserProfilePage extends StatelessWidget {
                       );
                       final cart = Provider.of<CartProvider>(context, listen: false);
                       cart.addToCart(cartItem);
+
+                      // Trigger notification
+                      Provider.of<NotificationProvider>(context, listen: false).addNotification(
+                        title: 'Item Added to Cart',
+                        message: '${product.name} has been added to your cart 🛒',
+                        type: 'cart',
+                      );
+
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text('${product.name} added to cart'),

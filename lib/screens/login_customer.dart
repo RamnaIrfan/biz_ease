@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'home_page.dart';  // ✅ Import HomePage directly
 import 'signup_customer.dart';  // ✅ Import SignupCustomerPage directly
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginCustomerPage extends StatefulWidget {
   const LoginCustomerPage({super.key});
@@ -16,6 +17,27 @@ class _LoginCustomerPageState extends State<LoginCustomerPage> {
   final TextEditingController passwordController = TextEditingController();
 
   bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedEmail();
+  }
+
+  Future<void> _loadSavedEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedEmail = prefs.getString('saved_customer_email');
+    if (savedEmail != null) {
+      setState(() {
+        usernameController.text = savedEmail;
+      });
+    }
+  }
+
+  Future<void> _saveEmail(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('saved_customer_email', email);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +117,9 @@ class _LoginCustomerPageState extends State<LoginCustomerPage> {
                     password: password,
                     userType: "customer",
                   );
+                  
+                  // Save email for next time
+                  await _saveEmail(email);
                   
                   // ✅ FIXED: Navigate to HomePage
                   if (context.mounted) {

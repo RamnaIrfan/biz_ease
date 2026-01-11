@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/product_model.dart';
+import 'notification_service.dart';
 
 class ProductService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -9,6 +10,21 @@ class ProductService {
   Future<void> createProduct(ProductModel product) async {
     try {
       await _firestore.collection(_collection).doc(product.id).set(product.toMap());
+      
+      // Trigger "New Arrival" or "Discount" notification to all users
+      bool isDiscount = product.name.toLowerCase().contains('discount') || 
+                       product.description.toLowerCase().contains('discount') ||
+                       product.name.toLowerCase().contains('sale') ||
+                       product.description.toLowerCase().contains('sale');
+
+      await NotificationService().createNotification(
+        userId: 'all', 
+        title: isDiscount ? 'Discount Alert! 💸' : 'New Arrival! 🔥',
+        message: isDiscount 
+            ? "Big savings! ${product.name} is now on sale. Grab it before it's gone!"
+            : "${product.name} is now available in ${product.category}. Check it out!",
+        type: isDiscount ? 'offer' : 'new_product',
+      );
     } catch (e) {
       throw 'Failed to add product: $e';
     }
@@ -257,6 +273,16 @@ class ProductService {
         }
         
         transaction.update(docRef, {'stock': newStock});
+        
+        // Trigger low stock alert if stock is low (e.g., <= 3)
+        if (newStock <= 3 && newStock > 0) {
+          NotificationService().createNotification(
+            userId: data['ownerId'] ?? 'system',
+            title: 'Low Stock Alert 📦',
+            message: 'Product "${data['name']}" is running low on stock (${newStock} left).',
+            type: 'cart',
+          );
+        }
       });
     } catch (e) {
       throw 'Failed to reduce stock: $e';

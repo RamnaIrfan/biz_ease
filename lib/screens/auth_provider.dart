@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/firebase_auth_service.dart';
 import '../services/customer_service.dart';
 import '../models/customer_model.dart';
+import '../services/notification_service.dart';
 
 class AuthProvider with ChangeNotifier {
   final FirebaseAuthService _authService = FirebaseAuthService();
@@ -13,12 +14,14 @@ class AuthProvider with ChangeNotifier {
   String _username = '';
   String _email = '';
   String _userType = '';
+  String? _profilePictureUrl;
   User? _firebaseUser;
   
   bool get isLoggedIn => _isLoggedIn;
   String get username => _username;
   String get email => _email;
   String get userType => _userType;
+  String? get profilePictureUrl => _profilePictureUrl;
   User? get firebaseUser => _firebaseUser;
   
   AuthProvider() {
@@ -29,6 +32,7 @@ class AuthProvider with ChangeNotifier {
         _isLoggedIn = true;
         _email = user.email ?? '';
         _username = user.displayName ?? user.email?.split('@')[0] ?? 'User';
+        _profilePictureUrl = user.photoURL;
         
         // Try to get user type from Firestore or user metadata
         _loadUserType(user);
@@ -66,6 +70,7 @@ class AuthProvider with ChangeNotifier {
     _username = '';
     _email = '';
     _userType = '';
+    _profilePictureUrl = null;
   }
   
   // Sign up with Firebase
@@ -193,6 +198,28 @@ class AuthProvider with ChangeNotifier {
         if (email != null && email.isNotEmpty) {
           _email = email;
         }
+
+        // Trigger notification
+        await NotificationService().createNotification(
+          userId: _firebaseUser!.uid,
+          title: 'Profile Updated',
+          message: 'Your profile information has been successfully updated 👤',
+          type: 'account',
+        );
+
+        notifyListeners();
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Update profile picture URL
+  Future<void> updateProfilePicture(String url) async {
+    try {
+      if (_firebaseUser != null) {
+        await _authService.updatePhotoURL(url);
+        _profilePictureUrl = url;
         notifyListeners();
       }
     } catch (e) {

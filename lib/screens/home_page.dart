@@ -15,6 +15,9 @@ import '../services/product_service.dart';
 import 'package:intl/intl.dart';
 import '../widgets/common_image.dart';
 import 'recent_provider.dart';
+import 'notification_provider.dart';
+import 'notification_page.dart';
+import 'product_details_page.dart';
 
 // Remove this import since we're not using OrderPage from home
 // import 'order_page.dart';
@@ -56,9 +59,11 @@ class _HomePageState extends State<HomePage> {
     if (auth.isLoggedIn && auth.userId != null) {
       Provider.of<WishlistProvider>(context, listen: false).init(auth.userId!);
       Provider.of<OrderProvider>(context, listen: false).init(auth.userId!);
+      Provider.of<NotificationProvider>(context, listen: false).init(auth.userId!);
     } else {
       Provider.of<WishlistProvider>(context, listen: false).clear();
       Provider.of<OrderProvider>(context, listen: false).clear();
+      Provider.of<NotificationProvider>(context, listen: false).clear();
     }
     
     return Scaffold(
@@ -134,10 +139,8 @@ class _HomePageState extends State<HomePage> {
             // Already on home page, do nothing
             break;
           case 1: // Categories
-            // Scroll to categories section in home content if not searching
-            if (_searchQuery.isEmpty && _selectedCategory == null) {
-              // We'll add a scroll controller to the home content
-            } else {
+            // Clear search/filter state if active
+            if (_searchQuery.isNotEmpty || _selectedCategory != null || _isShowingFlashSale || _isShowingRecent) {
               setState(() {
                 _searchController.text = '';
                 _searchQuery = '';
@@ -145,15 +148,19 @@ class _HomePageState extends State<HomePage> {
                 _isShowingFlashSale = false;
                 _isShowingRecent = false;
               });
-              
-              // Scroll to categories after a short delay to allow UI to rebuild if needed
-              Future.delayed(const Duration(milliseconds: 100), () {
-                final context = _categoriesKey.currentContext;
-                if (context != null) {
-                  Scrollable.ensureVisible(context, duration: const Duration(seconds: 1), curve: Curves.easeInOut);
-                }
-              });
             }
+            
+            // Scroll to categories section in home content
+            Future.delayed(const Duration(milliseconds: 100), () {
+              final context = _categoriesKey.currentContext;
+              if (context != null) {
+                Scrollable.ensureVisible(
+                  context, 
+                  duration: const Duration(seconds: 1), 
+                  curve: Curves.easeInOut
+                );
+              }
+            });
             break;
           case 2: // Cart
             Navigator.push(
@@ -203,13 +210,44 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.notifications, color: Colors.white, size: 28),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('No new notifications'),
-                    ),
+               Consumer<NotificationProvider>(
+                builder: (context, notifications, child) {
+                  return Stack(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.notifications, color: Colors.white, size: 28),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const NotificationPage()),
+                          );
+                        },
+                      ),
+                      if (notifications.unreadCount > 0)
+                        Positioned(
+                          right: 8,
+                          top: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 18,
+                              minHeight: 18,
+                            ),
+                            child: Text(
+                              '${notifications.unreadCount}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
                   );
                 },
               ),
@@ -421,10 +459,10 @@ Widget _buildSearchResults() {
             child: GridView.builder(
               padding: const EdgeInsets.all(16),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.7,
+                crossAxisCount: 3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: 0.55, // Increased height for 3rd column
               ),
               itemCount: products.length,
               itemBuilder: (context, index) {
@@ -478,20 +516,46 @@ Widget _buildSearchResults() {
         },
         child: ClipRRect(
           borderRadius: BorderRadius.circular(14),
-          child: Container(
-            height: 140,
-            color: primaryColor,
-            child: const Center(
-              child: Text(
-                "FLASH SALE\nUP TO 50% OFF",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+          child: Stack(
+            children: [
+              Image.asset(
+                'assets/sale.jpg',
+                height: 240,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+              Container(
+                height: 240,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.black.withAlpha(150), Colors.transparent],
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                  ),
                 ),
               ),
-            ),
+              const Positioned.fill(
+                child: Center(
+                  child: Text(
+                    "FLASH SALE\nUP TO 50% OFF",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      shadows: [
+                        Shadow(
+                          offset: Offset(0, 2),
+                          blurRadius: 4,
+                          color: Colors.black,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -590,6 +654,9 @@ Widget _buildSearchResults() {
               );
             },
           ),
+          _QuickCard(
+            icon: Icons.history,
+            title: "Recent",
             onTap: () {
               setState(() {
                 _isShowingRecent = true;
@@ -648,7 +715,7 @@ Widget _buildSearchResults() {
           ),
           const SizedBox(height: 12),
           SizedBox(
-            height: 220,
+            height: 210, // Increased buffer to prevent overflow
             child: StreamBuilder<List<ProductModel>>(
               stream: ProductService().getAllProducts(),
               builder: (context, snapshot) {
@@ -682,7 +749,7 @@ Widget _buildSearchResults() {
                   itemCount: productsToShow.length,
                   itemBuilder: (context, index) {
                     return Container(
-                      width: 150,
+                      width: 140,
                       margin: EdgeInsets.only(
                         right: index == productsToShow.length - 1 ? 0 : 12,
                       ),
@@ -702,18 +769,23 @@ Widget _buildProductCard(ProductModel product, {bool isDiscounted = false}) {
   final currencyFormat = NumberFormat.currency(symbol: 'Rs. ', decimalDigits: 0);
   final double displayPrice = isDiscounted ? product.price * 0.5 : product.price;
 
-  return GestureDetector(
-    onTap: () {
-      Provider.of<RecentProvider>(context, listen: false).addProduct(product);
-      // Optional: Add navigation to product details here if created in future
-    },
-    child: Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ConstrainedBox(
-      constraints: const BoxConstraints(
-        minHeight: 180,
-      ),
+  return Card(
+    elevation: 2,
+    clipBehavior: Clip.antiAlias,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    child: InkWell(
+      onTap: () {
+        Provider.of<RecentProvider>(context, listen: false).addProduct(product);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductDetailsPage(
+              product: product,
+              isDiscounted: isDiscounted,
+            ),
+          ),
+        );
+      },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -721,15 +793,15 @@ Widget _buildProductCard(ProductModel product, {bool isDiscounted = false}) {
           // Product Image
           Stack(
             children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                child: Container(
-                  height: 100,
-                  width: double.infinity,
-                  color: Colors.grey.shade100,
+              Container(
+                height: 80,
+                width: double.infinity,
+                color: Colors.white,
+                child: Hero(
+                  tag: 'product_${product.id}',
                   child: CommonImage(
                     imageUrl: product.imageUrl,
-                    fit: BoxFit.cover,
+                    fit: BoxFit.contain,
                   ),
                 ),
               ),
@@ -750,7 +822,7 @@ Widget _buildProductCard(ProductModel product, {bool isDiscounted = false}) {
                         }
                         
                         final item = WishlistItem(
-                          id: '', // Will be set by Firestore
+                          id: '',
                           productId: product.id,
                           ownerId: product.ownerId,
                           name: product.name,
@@ -805,22 +877,23 @@ Widget _buildProductCard(ProductModel product, {bool isDiscounted = false}) {
                 const SizedBox(height: 4),
                 // Product Price
                 if (isDiscounted) ...[
-                  Row(
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 4,
                     children: [
                       Text(
                         currencyFormat.format(product.price),
                         style: const TextStyle(
                           color: Colors.grey,
                           decoration: TextDecoration.lineThrough,
-                          fontSize: 10,
+                          fontSize: 9,
                         ),
                       ),
-                      const SizedBox(width: 4),
                       const Text(
                         "50% OFF",
                         style: TextStyle(
                           color: Colors.green,
-                          fontSize: 9,
+                          fontSize: 8,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -831,7 +904,7 @@ Widget _buildProductCard(ProductModel product, {bool isDiscounted = false}) {
                     style: const TextStyle(
                       color: Colors.red,
                       fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                      fontSize: 12,
                     ),
                   ),
                 ] else
@@ -840,11 +913,11 @@ Widget _buildProductCard(ProductModel product, {bool isDiscounted = false}) {
                     style: const TextStyle(
                       color: Colors.red,
                       fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                      fontSize: 13, // Slightly larger base price
                     ),
                   ),
                 const SizedBox(height: 8),
-                // Add to Cart Button
+                // Add to Cart Button (Larger)
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -858,16 +931,29 @@ Widget _buildProductCard(ProductModel product, {bool isDiscounted = false}) {
                       );
                       final cart = Provider.of<CartProvider>(context, listen: false);
                       cart.addToCart(cartItem);
+                      
+                      Provider.of<NotificationProvider>(context, listen: false).addNotification(
+                        title: 'Item Added to Cart',
+                        message: '${product.name} has been added to your cart 🛒',
+                        type: 'cart',
+                      );
+                      
                       _showSuccessDialog('${product.name} added to cart', Icons.shopping_cart);
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      minimumSize: const Size(0, 28),
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      minimumSize: const Size(0, 32), // Slightly reduced from 36
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 2,
                     ),
                     child: const Text(
                       'Add to Cart',
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 11, // Larger text
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
