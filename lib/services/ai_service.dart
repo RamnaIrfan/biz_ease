@@ -2,13 +2,13 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 
 class AIService {
   // TODO: Replace with a valid API key or fetch from a secure configuration
-  static const String _apiKey = 'AIzaSyAoZra5s_8Lonl5eWBSEyzbYILx0qQDiRs';
+  static const String _apiKey = 'AIzaSyAU2GzT0EGXT-MT89emrGuZ8ScaU7RFtSg';
   
   late final GenerativeModel _model;
-
+  
   AIService() {
     _model = GenerativeModel(
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       apiKey: _apiKey,
     );
   }
