@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import '../widgets/common_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../services/storage_service.dart';
+import '../services/ai_service.dart';
 
 class AddNewProductPage extends StatefulWidget {
   final ProductModel? product;
@@ -26,6 +27,7 @@ class _AddNewProductPageState extends State<AddNewProductPage> {
   final TextEditingController _descriptionController = TextEditingController();
   String? _imagePath;
   bool _isUploading = false;
+  bool _isGeneratingDescription = false;
 
   bool _isSaving = false;
   late String _productId;
@@ -269,9 +271,68 @@ class _AddNewProductPageState extends State<AddNewProductPage> {
               const SizedBox(height: 16),
 
               // Description
-              const Text(
-                'Description',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              // Description Header with AI Button
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Description',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  TextButton.icon(
+                    onPressed: _isGeneratingDescription
+                        ? null
+                        : () async {
+                            if (_nameController.text.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please enter a product name first'),
+                                ),
+                              );
+                              return;
+                            }
+                            setState(() => _isGeneratingDescription = true);
+                            
+                            final aiService = AIService();
+                            // Combining name and category as keywords
+                            final keywords = "${_nameController.text}, $_selectedCategory";
+                            
+                            try {
+                              final description = await aiService.generateProductDescription(
+                                _nameController.text,
+                                keywords,
+                              );
+
+                              setState(() => _isGeneratingDescription = false);
+
+                              if (description != null) {
+                                setState(() {
+                                  _descriptionController.text = description;
+                                });
+                              }
+                            } catch (e) {
+                              setState(() => _isGeneratingDescription = false);
+                              if (context.mounted) {
+                                final errorMessage = e.toString().replaceAll('GenerativeAIException: ', '');
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('AI Error: $errorMessage'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                    icon: _isGeneratingDescription
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.auto_awesome, size: 16),
+                    label: Text(_isGeneratingDescription ? 'Generating...' : 'Generate with AI'),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               TextFormField(

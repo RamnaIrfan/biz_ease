@@ -10,6 +10,8 @@ import 'owner_profile_page.dart';
 import 'my_products_page.dart'; 
 import 'add_new_product_page.dart'; 
 import 'owner_orders_page.dart';
+import 'marketing_page.dart';
+import '../widgets/business_insights_card.dart';
 
 class OwnerDashboardPage extends StatelessWidget {
   final OwnerModel owner;
@@ -93,8 +95,11 @@ class OwnerDashboardPage extends StatelessWidget {
                       final orders = orderSnapshot.data ?? [];
                       final pendingCount = orders.where((o) => o.status == OrderStatus.pending).length;
                       
-                      return StreamBuilder<List>(
-                        stream: ProductService().getProductsByOwner(ownerId),
+                      return Column(
+                        children: [
+                          BusinessInsightsCard(orders: orders),
+                          StreamBuilder<List>(
+                            stream: ProductService().getProductsByOwner(ownerId),
                         builder: (context, productSnapshot) {
                           if (productSnapshot.connectionState == ConnectionState.waiting) {
                             return const Center(child: CircularProgressIndicator());
@@ -129,7 +134,9 @@ class OwnerDashboardPage extends StatelessWidget {
                             },
                           );
                         },
-                      );
+                      ),
+                    ],
+                  );
                     },
                   );
                 },
@@ -150,6 +157,7 @@ class OwnerDashboardPage extends StatelessWidget {
               _buildActionButton(context, Icons.inventory_2, "My Products"),
               _buildActionButton(context, Icons.sync, "Sync Sample Products"),
               _buildActionButton(context, Icons.receipt_long, "Orders & Sales"),
+              _buildActionButton(context, Icons.campaign, "AI Marketing Assistant"),
               
 
               const SizedBox(height: 16),
@@ -431,6 +439,16 @@ class OwnerDashboardPage extends StatelessWidget {
               );
             }
           }
+        };
+        break;
+      case "AI Marketing Assistant":
+        onPressed = () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const MarketingPage(),
+            ),
+          );
         };
         break;
       case "Sync Sample Products":
