@@ -91,7 +91,7 @@ class SettingsPage extends StatelessWidget {
               'Contact Us',
               Icons.contact_support,
               onTap: () {
-                _showInfoDialog(context, 'Contact Us', 'You can reach biZEase support through the following channels:\n\n📧 Email: support@bizease.com\n📞 Phone: +92 300 1234567\n📍 Office: Sector H-12, Islamabad');
+                _showInfoDialog(context, 'Contact Us', 'You can reach biZEase support through the following channels:\n\n📧 Email: renproject@gmail.com\n📞 Phone: +92 300 1234567\n📍 Office: National Textile University,Faisalbad');
               },
             ),
             _settingsItem(

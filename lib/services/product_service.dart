@@ -279,7 +279,7 @@ class ProductService {
           NotificationService().createNotification(
             userId: data['ownerId'] ?? 'system',
             title: 'Low Stock Alert 📦',
-            message: 'Product "${data['name']}" is running low on stock (${newStock} left).',
+            message: 'Product "${data['name']}" is running low on stock ($newStock left).',
             type: 'cart',
           );
         }
