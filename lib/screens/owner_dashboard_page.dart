@@ -236,6 +236,10 @@ class OwnerDashboardPage extends StatelessWidget {
                           IconData statusIcon = Icons.pending;
                           
                           switch (order.status) {
+                            case OrderStatus.pending_confirmation:
+                              statusColor = Colors.orange;
+                              statusIcon = Icons.hourglass_empty;
+                              break;
                             case OrderStatus.pending:
                               statusColor = Colors.orange;
                               statusIcon = Icons.pending;

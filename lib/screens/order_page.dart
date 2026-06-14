@@ -16,47 +16,49 @@ class OrderPage extends StatelessWidget {
         title: const Text('My Orders'),
         backgroundColor: const Color(0xFFD88A1F),
       ),
-      body: orderProvider.orders.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.receipt_long,
-                    size: 100,
-                    color: Colors.grey.shade300,
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "No orders yet",
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    "Your order history will appear here",
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFD88A1F),
+      body: SelectionArea(
+        child: orderProvider.orders.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.receipt_long,
+                      size: 100,
+                      color: Colors.grey.shade300,
                     ),
-                    child: const Text("Back to Home"),
-                  ),
-                ],
+                    const SizedBox(height: 20),
+                    const Text(
+                      "No orders yet",
+                      style: TextStyle(fontSize: 18, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      "Your order history will appear here",
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD88A1F),
+                      ),
+                      child: const Text("Back to Home"),
+                    ),
+                  ],
+                ),
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: orderProvider.orders.length,
+                itemBuilder: (context, index) {
+                  final order = orderProvider.orders[index];
+                  return _buildOrderCard(order);
+                },
               ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: orderProvider.orders.length,
-              itemBuilder: (context, index) {
-                final order = orderProvider.orders[index];
-                return _buildOrderCard(order);
-              },
-            ),
+      ),
     );
   }
 
@@ -80,7 +82,7 @@ class OrderPage extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Order #...', 
+                  'Order #${order.id.substring(0, 8).toUpperCase()}', 
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Container(
@@ -135,6 +137,7 @@ class OrderPage extends StatelessWidget {
 
   Color _getStatusColor(OrderStatus status) {
     switch (status) {
+      case OrderStatus.pending_confirmation: return Colors.orange;
       case OrderStatus.pending: return Colors.orange;
       case OrderStatus.processing: return Colors.blue;
       case OrderStatus.confirmed: return Colors.indigo;

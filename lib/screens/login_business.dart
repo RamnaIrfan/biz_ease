@@ -1,7 +1,11 @@
+import 'dart:math';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:biz_ease/screens/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/owner_service.dart';
+import '../services/email_service.dart';
+import '../models/owner_model.dart';
 import 'owner_dashboard_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -68,7 +72,7 @@ class _LoginBusinessPageState extends State<LoginBusinessPage> {
 
             // 🔶 USERNAME
             _inputField(
-              "Enter your username",
+              "Enter your email",
               controller: usernameController,
             ),
 
@@ -117,12 +121,7 @@ class _LoginBusinessPageState extends State<LoginBusinessPage> {
                     // Direct access to Owner Dashboard
                     final owner = await ownerService.getOwner(authProvider.userId!);
                     if (owner != null && context.mounted) {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => OwnerDashboardPage(owner: owner),
-                        ),
-                      );
+                      await _initiateMfaFlow(email, owner);
                     }
                   } else {
                     // Business not registered. Please sign up.
@@ -146,6 +145,132 @@ class _LoginBusinessPageState extends State<LoginBusinessPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // 🔒 INITIATE MFA FLOW
+  Future<void> _initiateMfaFlow(String email, OwnerModel owner) async {
+    // 1. Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // 2. Generate 6-digit code
+      final code = (100000 + Random().nextInt(900000)).toString();
+
+      // 3. Save to Firestore
+      await FirebaseFirestore.instance.collection('mfa_codes').doc(email).set({
+        'code': code,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // 4. Send email
+      final emailService = EmailService();
+      await emailService.sendMfaCode(ownerEmail: email, code: code);
+
+      if (context.mounted) {
+        // Dismiss loading indicator
+        Navigator.pop(context);
+        
+        // 5. Show OTP Dialog
+        _showMfaDialog(email, owner);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Dismiss loading
+        _showError("Failed to initiate secure login: \$e");
+      }
+    }
+  }
+
+  // 🔒 SHOW MFA DIALOG
+  void _showMfaDialog(String email, OwnerModel owner) {
+    final TextEditingController otpController = TextEditingController();
+    bool isVerifying = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text("Secure Login"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text("Enter the 6-digit code sent to your email.", textAlign: TextAlign.center),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: otpController,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 24, letterSpacing: 8, fontWeight: FontWeight.bold),
+                  decoration: const InputDecoration(
+                    counterText: "",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isVerifying ? null : () {
+                  // User cancelled, sign them out
+                  final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                  authProvider.signOut();
+                  Navigator.pop(context);
+                },
+                child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD88A1F)),
+                onPressed: isVerifying ? null : () async {
+                  final enteredCode = otpController.text.trim();
+                  if (enteredCode.length != 6) return;
+
+                  setDialogState(() => isVerifying = true);
+
+                  try {
+                    final doc = await FirebaseFirestore.instance.collection('mfa_codes').doc(email).get();
+                    
+                    if (doc.exists && doc.data()!['code'] == enteredCode) {
+                      // Code matches! Clean up and proceed
+                      await FirebaseFirestore.instance.collection('mfa_codes').doc(email).delete();
+                      
+                      if (context.mounted) {
+                        Navigator.pop(context); // Close dialog
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => OwnerDashboardPage(owner: owner),
+                          ),
+                        );
+                      }
+                    } else {
+                      setDialogState(() => isVerifying = false);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Invalid or expired code"), backgroundColor: Colors.red),
+                      );
+                    }
+                  } catch (e) {
+                    setDialogState(() => isVerifying = false);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Error verifying code: \$e"), backgroundColor: Colors.red),
+                    );
+                  }
+                },
+                child: isVerifying
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text("Verify", style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        }
       ),
     );
   }
@@ -222,6 +347,73 @@ class _LoginBusinessPageState extends State<LoginBusinessPage> {
                 const BorderSide(color: Color(0xFFD88A1F), width: 2),
           ),
         ),
+      ),
+    );
+  }
+
+  /// 🔶 FORGOT PASSWORD DIALOG
+  void _showForgotPasswordDialog() {
+    final TextEditingController resetEmailController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Reset Password"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Enter your registered email to receive a password reset link."),
+            const SizedBox(height: 15),
+            TextField(
+              controller: resetEmailController,
+              decoration: InputDecoration(
+                hintText: "Email",
+                prefixIcon: const Icon(Icons.email, color: Color(0xFFD88A1F)),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFD88A1F)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFD88A1F), width: 2),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD88A1F)),
+            onPressed: () async {
+              final email = resetEmailController.text.trim();
+              if (email.isEmpty) return;
+              
+              try {
+                final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                await authProvider.resetPassword(email);
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Reset link sent to your email! Check your inbox."),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text("Send Link", style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }

@@ -35,9 +35,16 @@ class CartPage extends StatelessWidget {
                             child: const Text("Cancel"),
                           ),
                           TextButton(
-                            onPressed: () {
-                              cart.clearCart();
-                              Navigator.pop(context);
+                            onPressed: () async {
+                              try {
+                                await cart.clearCart();
+                                if (context.mounted) Navigator.pop(context);
+                              } catch (e) {
+                                if (context.mounted) {
+                                  Navigator.pop(context); // Close dialog
+                                  _showError(context, e);
+                                }
+                              }
                             },
                             child: const Text("Clear", style: TextStyle(color: Colors.red)),
                           ),
@@ -130,8 +137,14 @@ class CartPage extends StatelessWidget {
                                     children: [
                                       IconButton(
                                         icon: const Icon(Icons.remove, size: 18),
-                                        onPressed: () {
-                                          cart.decreaseQuantity(item.id);
+                                        onPressed: () async {
+                                          try {
+                                            await cart.decreaseQuantity(item.id);
+                                          } catch (e) {
+                                            if (context.mounted) {
+                                              _showError(context, e);
+                                            }
+                                          }
                                         },
                                       ),
                                       Text(
@@ -140,8 +153,14 @@ class CartPage extends StatelessWidget {
                                       ),
                                       IconButton(
                                         icon: const Icon(Icons.add, size: 18),
-                                        onPressed: () {
-                                          cart.increaseQuantity(item.id);
+                                        onPressed: () async {
+                                          try {
+                                            await cart.increaseQuantity(item.id);
+                                          } catch (e) {
+                                            if (context.mounted) {
+                                              _showError(context, e);
+                                            }
+                                          }
                                         },
                                       ),
                                     ],
@@ -162,8 +181,14 @@ class CartPage extends StatelessWidget {
                         ),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () {
-                            cart.removeFromCart(item.id);
+                          onPressed: () async {
+                            try {
+                              await cart.removeFromCart(item.id);
+                            } catch (e) {
+                              if (context.mounted) {
+                                _showError(context, e);
+                              }
+                            }
                           },
                         ),
                       ),
@@ -186,6 +211,9 @@ class CartPage extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
+                    const SizedBox(height: 8),
+                    _buildFreeShippingProgress(cart.totalPrice),
+                    const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -201,7 +229,14 @@ class CartPage extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text("Shipping:", style: TextStyle(fontSize: 16)),
-                        const Text("Rs. 200", style: TextStyle(fontSize: 16)),
+                        Text(
+                          cart.totalPrice >= 3000 ? "FREE" : "Rs. 200", 
+                          style: TextStyle(
+                            fontSize: 16, 
+                            color: cart.totalPrice >= 3000 ? Colors.green : Colors.black87,
+                            fontWeight: cart.totalPrice >= 3000 ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
                       ],
                     ),
                     const Divider(height: 24),
@@ -210,7 +245,7 @@ class CartPage extends StatelessWidget {
                       children: [
                         const Text("Total:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         Text(
-                          "Rs. ${_formatPrice(cart.totalPrice + 200)}",
+                          "Rs. ${_formatPrice(cart.totalPrice >= 3000 ? cart.totalPrice : cart.totalPrice + 200)}",
                           style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
@@ -260,6 +295,36 @@ SizedBox(
       ),
     );
   }
+  Widget _buildFreeShippingProgress(double totalPrice) {
+    const double threshold = 3000;
+    final double progress = (totalPrice / threshold).clamp(0.0, 1.0);
+    final double remaining = threshold - totalPrice;
+
+    return Column(
+      children: [
+        LinearProgressIndicator(
+          value: progress,
+          backgroundColor: Colors.grey.shade200,
+          valueColor: AlwaysStoppedAnimation<Color>(
+            progress >= 1.0 ? Colors.green : const Color(0xFFD88A1F),
+          ),
+          minHeight: 8,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          progress >= 1.0
+              ? "🎉 You qualified for FREE shipping!"
+              : "Add Rs. ${_formatPrice(remaining)} more for FREE shipping",
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: progress >= 1.0 ? Colors.green : Colors.grey.shade700,
+          ),
+        ),
+      ],
+    );
+  }
 
   // Helper function to format price with commas and without decimals for whole numbers
   String _formatPrice(double price) {
@@ -276,5 +341,27 @@ SizedBox(
         (Match m) => '${m[1]},',
       );
     }
+  }
+
+  void _showError(BuildContext context, dynamic e) {
+    String errorMsg = e.toString()
+        .replaceAll('Exception: ', '')
+        .replaceAll('Failed to reduce stock: ', '')
+        .replaceAll('Failed to increase stock: ', '')
+        .trim();
+    
+    // Fallback for Flutter Web "converted Future" errors
+    if (errorMsg.contains('Future') || errorMsg.contains('boxed error') || errorMsg.contains('only')) {
+      errorMsg = "You can't add more";
+    }
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(errorMsg),
+        backgroundColor: Colors.red.shade700,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 }

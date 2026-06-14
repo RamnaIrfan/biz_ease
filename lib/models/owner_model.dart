@@ -7,6 +7,7 @@ class OwnerModel {
   final String businessName;
   final String address;
   final String category;
+  final bool emailAlertsEnabled;
 
   OwnerModel({
     required this.id,
@@ -16,6 +17,7 @@ class OwnerModel {
     required this.businessName,
     required this.address,
     required this.category,
+    this.emailAlertsEnabled = true,
   });
 
   // Convert to Map for Firestore
@@ -28,6 +30,7 @@ class OwnerModel {
       'businessName': businessName,
       'address': address,
       'category': category,
+      'emailAlertsEnabled': emailAlertsEnabled,
     };
   }
 
@@ -41,6 +44,7 @@ class OwnerModel {
       businessName: map['businessName'] ?? '',
       address: map['address'] ?? '',
       category: map['category'] ?? '',
+      emailAlertsEnabled: map['emailAlertsEnabled'] ?? true,
     );
   }
 }

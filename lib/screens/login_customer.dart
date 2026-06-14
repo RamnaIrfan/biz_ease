@@ -80,7 +80,7 @@ class _LoginCustomerPageState extends State<LoginCustomerPage> {
             const SizedBox(height: 10),
 
             _inputField(
-              "Enter your username",
+              "Enter your email",
               controller: usernameController,
             ),
 
@@ -154,11 +154,9 @@ class _LoginCustomerPageState extends State<LoginCustomerPage> {
               ),
             ),
             
-            // ✅ ADDED: Forgot Password option
+            // ✅ FIXED: Forgot Password functionality
             TextButton(
-              onPressed: () {
-                _showError("Forgot password feature coming soon!");
-              },
+              onPressed: () => _showForgotPasswordDialog(),
               child: const Text(
                 "Forgot Password?",
                 style: TextStyle(color: Colors.grey),
@@ -226,6 +224,73 @@ class _LoginCustomerPageState extends State<LoginCustomerPage> {
                 const BorderSide(color: Color(0xFFD88A1F), width: 2),
           ),
         ),
+      ),
+    );
+  }
+
+  /// 🔶 FORGOT PASSWORD DIALOG
+  void _showForgotPasswordDialog() {
+    final TextEditingController resetEmailController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Reset Password"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Enter your registered email to receive a password reset link."),
+            const SizedBox(height: 15),
+            TextField(
+              controller: resetEmailController,
+              decoration: InputDecoration(
+                hintText: "Email",
+                prefixIcon: const Icon(Icons.email, color: Color(0xFFD88A1F)),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFD88A1F)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFD88A1F), width: 2),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD88A1F)),
+            onPressed: () async {
+              final email = resetEmailController.text.trim();
+              if (email.isEmpty) return;
+              
+              try {
+                final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                await authProvider.resetPassword(email);
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Reset link sent to your email! Check your inbox."),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text("Send Link", style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }

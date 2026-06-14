@@ -28,8 +28,8 @@ class OrderPlacedPage extends StatelessWidget {
     final primaryColor = const Color(0xFFD88A1F);
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     
-    // Constant shipping for now
-    final double shipping = 200.0;
+    // Dynamic shipping logic
+    final double shipping = totalAmount >= 3000 ? 0 : 200.0;
     final double subtotal = totalAmount - shipping;
 
     return PopScope(
@@ -74,7 +74,7 @@ class OrderPlacedPage extends StatelessWidget {
                   const SizedBox(height: 16),
                   
                   Text(
-                    'Thank you for your purchase. Your order has been confirmed.',
+                    'Thank you for your purchase. Your order has been placed and is now being processed.',
                     style: TextStyle(
                       fontSize: 16,
                       color: Colors.grey.shade600,
@@ -101,7 +101,11 @@ class OrderPlacedPage extends StatelessWidget {
                           const Divider(height: 24),
                           _buildDetailRow('Subtotal', 'Rs. ${_formatPrice(subtotal)}'),
                           const SizedBox(height: 8),
-                          _buildDetailRow('Shipping', 'Rs. ${_formatPrice(shipping)}'),
+                          _buildDetailRow(
+                            'Shipping', 
+                            shipping == 0 ? 'FREE' : 'Rs. ${_formatPrice(shipping)}',
+                            valueColor: shipping == 0 ? Colors.green : Colors.black87,
+                          ),
                           const Divider(height: 24),
                           _buildDetailRow(
                             'Total Amount',
@@ -185,7 +189,7 @@ class OrderPlacedPage extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailRow(String label, String value, {bool isTotal = false}) {
+  Widget _buildDetailRow(String label, String value, {bool isTotal = false, Color? valueColor}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -202,7 +206,7 @@ class OrderPlacedPage extends StatelessWidget {
           style: TextStyle(
             fontSize: isTotal ? 18 : 16,
             fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,
-            color: isTotal ? const Color(0xFFD88A1F) : Colors.black87,
+            color: valueColor ?? (isTotal ? const Color(0xFFD88A1F) : Colors.black87),
           ),
         ),
       ],
@@ -308,8 +312,9 @@ class OrderPlacedPage extends StatelessWidget {
     final formattedDate = '${now.day}/${now.month}/${now.year}';
     final formattedTime = '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
     
-    final shipping = 200.0;
-    final subtotal = totalAmount - shipping;
+    final double shipping = totalAmount >= 3000 ? 0 : 200.0;
+    final double subtotal = totalAmount - shipping;
+    final String shippingDisplay = shipping == 0 ? 'FREE' : 'Rs. ${_formatPrice(shipping)}';
     
     return '''
 ╔══════════════════════════════════════════╗
@@ -326,7 +331,7 @@ Payment Method: $paymentMethod
 AMOUNT DETAILS
 ─────────────
 Subtotal:      Rs. ${_formatPrice(subtotal)}
-Shipping:      Rs. ${_formatPrice(shipping)}
+Shipping:      $shippingDisplay
 ─────────────
 TOTAL:         Rs. ${_formatPrice(totalAmount)}
 
@@ -342,8 +347,8 @@ Thank you for shopping with BizEase!
     final formattedDate = '${now.day}/${now.month}/${now.year}';
     final formattedTime = '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
     
-    final shipping = 200.0;
-    final subtotal = totalAmount - shipping;
+    final double shipping = totalAmount >= 3000 ? 0 : 200.0;
+    final double subtotal = totalAmount - shipping;
 
     pdf.addPage(
       pw.Page(
@@ -406,7 +411,8 @@ Thank you for shopping with BizEase!
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
                       pw.Text('Shipping:'),
-                      pw.Text('Rs. ${_formatPrice(shipping)}'),
+                      pw.Text(shipping == 0 ? 'FREE' : 'Rs. ${_formatPrice(shipping)}', 
+                        style: pw.TextStyle(color: shipping == 0 ? PdfColors.green : PdfColors.black)),
                     ]),
                 pw.Divider(),
                 pw.Row(

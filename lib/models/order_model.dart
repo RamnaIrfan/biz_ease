@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'cart_item.dart';
 
 enum OrderStatus {
+  pending_confirmation,
   pending,
   confirmed,
   processing,
@@ -81,7 +82,7 @@ class OrderModel {
       totalAmount: (map['totalAmount'] ?? 0.0).toDouble(),
       status: OrderStatus.values.firstWhere(
         (e) => e.name == map['status'],
-        orElse: () => OrderStatus.pending,
+        orElse: () => OrderStatus.pending_confirmation,
       ),
       deliveryAddress: map['deliveryAddress'],
       phoneNumber: map['phoneNumber'],
@@ -139,6 +140,8 @@ class OrderModel {
   // Get status display text
   String get statusText {
     switch (status) {
+      case OrderStatus.pending_confirmation:
+        return 'Verifying...';
       case OrderStatus.pending:
         return 'Pending';
       case OrderStatus.confirmed:

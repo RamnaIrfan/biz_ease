@@ -1,10 +1,26 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/product_model.dart';
 import 'notification_service.dart';
+import 'email_service.dart';
 
 class ProductService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String _collection = 'products';
+
+  // Get a single product by ID
+  Future<ProductModel?> getProductById(String productId) async {
+    try {
+      DocumentSnapshot doc = await _firestore.collection(_collection).doc(productId).get();
+      if (doc.exists) {
+        return ProductModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error getting product by id: $e');
+      return null;
+    }
+  }
 
   // Create a new product
   Future<void> createProduct(ProductModel product) async {
@@ -24,7 +40,13 @@ class ProductService {
             ? "Big savings! ${product.name} is now on sale. Grab it before it's gone!"
             : "${product.name} is now available in ${product.category}. Check it out!",
         type: isDiscount ? 'offer' : 'new_product',
+        metadata: {'productId': product.id},
       );
+
+      // Send confirmation to owner
+      await _sendOwnerEmail(product, 'new');
+
+      await _handleStockEmailAlert(product);
     } catch (e) {
       throw 'Failed to add product: $e';
     }
@@ -113,10 +135,72 @@ class ProductService {
     });
   }
 
+  Future<void> _handleStockEmailAlert(ProductModel product) async {
+    final newStock = product.stock;
+    final lastAlertedStock = product.lastAlertedStock;
+    
+    // Determine the current alert threshold
+    String? currentThreshold;
+    if (newStock == 0) {
+      currentThreshold = 'out';
+    } else if (newStock <= 2) {
+      currentThreshold = 'low';
+    }
+    
+    // If current stock is not in an alert state, reset lastAlertedStock if it was set
+    if (currentThreshold == null) {
+      if (lastAlertedStock != null) {
+        await _firestore.collection(_collection).doc(product.id).update({
+          'lastAlertedStock': FieldValue.delete(),
+        });
+      }
+      return;
+    }
+
+    // Determine the last alert threshold
+    String? lastThreshold;
+    if (lastAlertedStock != null) {
+      if (lastAlertedStock == 0) {
+        lastThreshold = 'out';
+      } else if (lastAlertedStock <= 2) {
+        lastThreshold = 'low';
+      }
+    }
+    
+    // Only send if the threshold has changed (e.g., from none to low, or low to out)
+    if (currentThreshold != lastThreshold) {
+      try {
+        final ownerDoc = await _firestore.collection('owners').doc(product.ownerId).get();
+        if (ownerDoc.exists) {
+          final ownerData = ownerDoc.data()!;
+          bool alertsEnabled = ownerData['emailAlertsEnabled'] ?? true;
+          
+          if (alertsEnabled && ownerData['email'] != null) {
+            await EmailService().sendLowStockEmail(
+              ownerEmail: ownerData['email'],
+              businessName: ownerData['businessName'] ?? 'Business Owner',
+              product: product,
+              type: currentThreshold,
+            );
+            
+            // Update lastAlertedStock to the current stock level
+            await _firestore.collection(_collection).doc(product.id).update({
+              'lastAlertedStock': newStock,
+            });
+          }
+        }
+      } catch (e) {
+        print('Error sending stock email: $e');
+      }
+    }
+  }
+
   // Update product (e.g., stock)
   Future<void> updateProduct(ProductModel product) async {
     try {
       await _firestore.collection(_collection).doc(product.id).update(product.toMap());
+      await _sendOwnerEmail(product, 'update');
+      await _handleStockEmailAlert(product);
     } catch (e) {
       throw 'Failed to update product: $e';
     }
@@ -164,7 +248,7 @@ class ProductService {
         'name': 'Matte Lipstick',
         'price': 1200.0,
         'stock': 50,
-        'category': 'Beauty',
+        'category': 'Makeup',
         'description': 'Long-lasting matte lipstick in various shades.',
         'imageUrl': 'assets/lipstick.png',
       },
@@ -200,6 +284,30 @@ class ProductService {
         'description': 'Powerful smartphone with advanced camera system.',
         'imageUrl': 'assets/phone.png',
       },
+      {
+        'name': 'Foundation Cream',
+        'price': 2500.0,
+        'stock': 30,
+        'category': 'Makeup',
+        'description': 'Flawless liquid foundation for a perfect, natural look.',
+        'imageUrl': 'assets/foundation.png',
+      },
+      {
+        'name': 'Eyeshadow Palette',
+        'price': 3800.0,
+        'stock': 15,
+        'category': 'Makeup',
+        'description': 'Vibrant 12-shade eyeshadow palette with matte and shimmer finishes.',
+        'imageUrl': 'assets/eyeshadow.png',
+      },
+      {
+        'name': 'Mascara Waterproof',
+        'price': 1800.0,
+        'stock': 25,
+        'category': 'Makeup',
+        'description': 'Waterproof volumizing mascara for long, thick lashes.',
+        'imageUrl': 'assets/mascara.png',
+      },
     ];
 
     try {
@@ -229,7 +337,10 @@ class ProductService {
       'Smart Watch',
       'Summer Dress',
       'Luxury Perfume',
-      'Smartphone'
+      'Smartphone',
+      'Foundation Cream',
+      'Eyeshadow Palette',
+      'Mascara Waterproof'
     ];
 
     try {
@@ -257,6 +368,7 @@ class ProductService {
   // Reduce product stock
   Future<void> reduceStock(String productId, int quantity) async {
     try {
+      ProductModel? updatedProduct;
       DocumentReference docRef = _firestore.collection(_collection).doc(productId);
       await _firestore.runTransaction((transaction) async {
         DocumentSnapshot snapshot = await transaction.get(docRef);
@@ -266,11 +378,16 @@ class ProductService {
         
         Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
         int currentStock = data['stock'] ?? 0;
-        int newStock = currentStock - quantity;
         
-        if (newStock < 0) {
-          newStock = 0; // Prevent negative stock
+        if (currentStock == 0) {
+          throw Exception('Product is out of stock');
         }
+        
+        if (currentStock < quantity) {
+          throw Exception("You can't add more, only $currentStock left");
+        }
+        
+        int newStock = currentStock - quantity;
         
         transaction.update(docRef, {'stock': newStock});
         
@@ -283,9 +400,18 @@ class ProductService {
             type: 'cart',
           );
         }
+        
+        updatedProduct = ProductModel.fromMap({...data, 'stock': newStock}, snapshot.id);
       });
+      
+      if (updatedProduct != null) {
+        await _handleStockEmailAlert(updatedProduct!);
+      }
     } catch (e) {
-      throw 'Failed to reduce stock: $e';
+      if (e.toString().contains('Product is out of stock') || e.toString().contains("You can't add more")) {
+        rethrow;
+      }
+      throw Exception('Failed to reduce stock: $e');
     }
   }
 
@@ -393,7 +519,10 @@ class ProductService {
         'Smart Watch',
         'Summer Dress',
         'Luxury Perfume',
-        'Smartphone'
+        'Smartphone',
+        'Foundation Cream',
+        'Eyeshadow Palette',
+        'Mascara Waterproof'
       ];
 
       WriteBatch batch = _firestore.batch();
@@ -418,6 +547,81 @@ class ProductService {
       return count;
     } catch (e) {
       throw 'Failed to delete sample products: $e';
+    }
+  }
+
+  // Increase product stock
+  Future<void> increaseStock(String productId, int quantity) async {
+    try {
+      ProductModel? updatedProduct;
+      DocumentReference docRef = _firestore.collection(_collection).doc(productId);
+      await _firestore.runTransaction((transaction) async {
+        DocumentSnapshot snapshot = await transaction.get(docRef);
+        if (!snapshot.exists) {
+          throw Exception('Product does not exist!');
+        }
+        
+        Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
+        int currentStock = data['stock'] ?? 0;
+        int newStock = currentStock + quantity;
+        
+        transaction.update(docRef, {'stock': newStock});
+        
+        updatedProduct = ProductModel.fromMap({...data, 'stock': newStock}, snapshot.id);
+      });
+      
+      if (updatedProduct != null) {
+        await _sendOwnerEmail(updatedProduct!, 'update');
+        await _handleStockEmailAlert(updatedProduct!);
+      }
+    } catch (e) {
+      if (e.toString().contains('Product does not exist')) rethrow;
+      throw Exception('Failed to increase stock: $e');
+    }
+  }
+
+  // Get a stream of a single product for real-time updates
+  Stream<ProductModel?> getProductStream(String productId) {
+    return _firestore
+        .collection(_collection)
+        .doc(productId)
+        .snapshots()
+        .map((snapshot) {
+      if (snapshot.exists) {
+        return ProductModel.fromMap(snapshot.data() as Map<String, dynamic>, snapshot.id);
+      }
+      return null;
+    });
+  }
+
+  // Helper to send emails to owners
+  Future<void> _sendOwnerEmail(ProductModel product, String type) async {
+    try {
+      final ownerDoc = await _firestore.collection('owners').doc(product.ownerId).get();
+      if (ownerDoc.exists) {
+        final ownerData = ownerDoc.data()!;
+        final email = ownerData['email'] as String?;
+        final businessName = ownerData['businessName'] as String? ?? 'Business Owner';
+        
+        if (email != null && email.isNotEmpty) {
+          final emailService = EmailService();
+          if (type == 'new') {
+            await emailService.sendNewProductConfirmation(
+              ownerEmail: email,
+              businessName: businessName,
+              product: product,
+            );
+          } else if (type == 'update') {
+            await emailService.sendStockUpdateConfirmation(
+              ownerEmail: email,
+              businessName: businessName,
+              product: product,
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error sending owner email ($type): $e');
     }
   }
 }

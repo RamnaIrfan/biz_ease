@@ -84,29 +84,33 @@ class _BusinessInsightsCardState extends State<BusinessInsightsCard> {
             ],
           ),
           const SizedBox(height: 12),
-          if (!_hasGenerated)
-            Center(
-              child: ElevatedButton.icon(
-                onPressed: _isGenerating ? null : _generateInsights,
-                icon: _isGenerating 
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) 
-                  : const Icon(Icons.auto_awesome),
-                label: Text(_isGenerating ? 'Analyzing...' : 'Generate Insights'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.indigo,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            )
-          else if (_insights != null)
+          if (_hasGenerated && _insights != null)
             Text(
               _insights!,
-              style: const TextStyle(fontSize: 15, height: 1.4),
-            )
-          else
-            const Text(
-              'Failed to generate insights.',
-              style: TextStyle(color: Colors.red),
+              style: TextStyle(
+                fontSize: 15, 
+                height: 1.4,
+                color: _insights!.startsWith('⚠️') ? Colors.red.shade900 : Colors.black87,
+              ),
+            ),
+          if (!_hasGenerated || (_insights != null && _insights!.startsWith('⚠️')))
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Center(
+                child: ElevatedButton.icon(
+                  onPressed: _isGenerating ? null : _generateInsights,
+                  icon: _isGenerating 
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) 
+                    : Icon(_hasGenerated ? Icons.refresh : Icons.auto_awesome),
+                  label: Text(_isGenerating 
+                    ? 'Analyzing...' 
+                    : (_hasGenerated ? 'Try Again' : 'Generate Insights')),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.indigo,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
             ),
         ],
       ),

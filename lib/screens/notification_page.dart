@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'notification_provider.dart';
 import '../models/notification_model.dart';
+import 'cart_page.dart';
+import 'product_details_page.dart';
+import '../services/product_service.dart';
+import '../models/product_model.dart';
 import 'package:intl/intl.dart';
 
 class NotificationPage extends StatelessWidget {
@@ -109,9 +113,56 @@ class NotificationPage extends StatelessWidget {
                 ),
               )
             : null,
-        onTap: () {
+        onTap: () async {
           provider.markAsRead(notification.id);
-          // Optional: Navigate based on notification type
+          
+          if (notification.type == 'cart') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const CartPage()),
+            );
+          } else if ((notification.type == 'new_product' || notification.type == 'offer') && 
+                     notification.metadata != null && 
+                     notification.metadata!['productId'] != null) {
+            
+            final productId = notification.metadata!['productId'];
+            
+            // Show loading
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => const Center(child: CircularProgressIndicator()),
+            );
+            
+            try {
+              final product = await ProductService().getProductById(productId);
+              if (context.mounted) {
+                Navigator.pop(context); // Remove loader
+                if (product != null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ProductDetailsPage(
+                        product: product,
+                        isDiscounted: notification.type == 'offer',
+                      ),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Product not found or deleted')),
+                  );
+                }
+              }
+            } catch (e) {
+              if (context.mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error loading product: $e')),
+                );
+              }
+            }
+          }
         },
       ),
     );

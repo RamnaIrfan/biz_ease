@@ -2,10 +2,11 @@
 class CartItem {
   final String id;
   final String ownerId;
-  final String name;
-  final String price; // This is the formatted price string
-  final String image;
+  String name;
+  String price; // This is the formatted price string
+  String image;
   int quantity;
+  bool isDiscounted;
 
   CartItem({
     required this.id,
@@ -14,6 +15,7 @@ class CartItem {
     required this.price,
     required this.image,
     this.quantity = 1,
+    this.isDiscounted = false,
   });
 
   // Helper method to get numeric price for calculations
@@ -42,6 +44,7 @@ class CartItem {
       'price': price,
       'image': image,
       'quantity': quantity,
+      'isDiscounted': isDiscounted,
     };
   }
 
@@ -54,6 +57,7 @@ class CartItem {
       price: map['price'] ?? '0',
       image: map['image'] ?? '',
       quantity: map['quantity'] ?? 1,
+      isDiscounted: map['isDiscounted'] ?? false,
     );
   }
 }

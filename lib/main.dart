@@ -22,11 +22,17 @@ import 'screens/home_page.dart';
 import 'screens/user_profile_page.dart';
 import 'screens/owner_dashboard_page.dart';
 
+import 'services/push_notification_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  
+  // Initialize Push Notifications
+  await PushNotificationService.initialize();
+  
   runApp(const MyApp());
 }
 

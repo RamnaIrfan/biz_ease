@@ -6,6 +6,7 @@ class NotificationModel {
   final String title;
   final String message;
   final String type; // e.g., 'order', 'offer', 'cart', 'payment', 'account', 'review', 'new_product'
+  final Map<String, dynamic>? metadata;
   final bool isRead;
   final DateTime createdAt;
 
@@ -15,6 +16,7 @@ class NotificationModel {
     required this.title,
     required this.message,
     required this.type,
+    this.metadata,
     this.isRead = false,
     required this.createdAt,
   });
@@ -26,6 +28,7 @@ class NotificationModel {
       'title': title,
       'message': message,
       'type': type,
+      'metadata': metadata,
       'isRead': isRead,
       'createdAt': Timestamp.fromDate(createdAt),
     };
@@ -38,6 +41,7 @@ class NotificationModel {
       title: map['title'] ?? '',
       message: map['message'] ?? '',
       type: map['type'] ?? 'general',
+      metadata: map['metadata'],
       isRead: map['isRead'] ?? false,
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );

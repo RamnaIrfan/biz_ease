@@ -5,6 +5,7 @@ import '../services/firebase_auth_service.dart';
 import '../services/customer_service.dart';
 import '../models/customer_model.dart';
 import '../services/notification_service.dart';
+import '../services/push_notification_service.dart';
 
 class AuthProvider with ChangeNotifier {
   final FirebaseAuthService _authService = FirebaseAuthService();
@@ -36,6 +37,9 @@ class AuthProvider with ChangeNotifier {
         
         // Try to get user type from Firestore or user metadata
         _loadUserType(user);
+        
+        // Sync FCM Token for push notifications
+        PushNotificationService.updateTokenInFirestore(user.uid);
         
         notifyListeners();
       } else {
@@ -118,6 +122,15 @@ class AuthProvider with ChangeNotifier {
           // The Firestore error is logged but doesn't prevent login
         }
         
+        // Send email verification immediately upon sign-up
+        try {
+          if (!credential.user!.emailVerified) {
+            await credential.user!.sendEmailVerification();
+          }
+        } catch (e) {
+          print("Failed to send verification email: $e");
+        }
+
         notifyListeners();
       }
     } catch (e) {
@@ -242,16 +255,46 @@ class AuthProvider with ChangeNotifier {
   
   // Send password reset email
   Future<void> resetPassword(String email) async {
+    print("[AUTH] Attempting password reset for: $email");
     try {
       await _authService.sendPasswordResetEmail(email);
+      print("[AUTH] Reset email sent successfully to Firebase.");
     } catch (e) {
+      print("[AUTH] Reset error: $e");
       rethrow;
     }
   }
   
+  // Send email verification
+  Future<void> sendEmailVerification() async {
+    try {
+      if (_firebaseUser != null && !_firebaseUser!.emailVerified) {
+        await _firebaseUser!.sendEmailVerification();
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Reload user to check verification status
+  Future<void> reloadUser() async {
+    try {
+      if (_firebaseUser != null) {
+        await _firebaseUser!.reload();
+        _firebaseUser = FirebaseAuth.instance.currentUser;
+        notifyListeners();
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   // Get current user ID
   String? get userId => _firebaseUser?.uid;
   
   // Check if user is authenticated
   bool get isAuthenticated => _firebaseUser != null;
+  
+  // Check if email is verified
+  bool get isEmailVerified => _firebaseUser?.emailVerified ?? false;
 }

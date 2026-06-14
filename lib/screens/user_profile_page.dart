@@ -21,6 +21,7 @@ import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class UserProfilePage extends StatefulWidget {
   const UserProfilePage({super.key});
@@ -48,14 +49,23 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
     try {
       final userId = authProvider.userId;
-      if (userId == null) return;
+      if (userId == null) {
+        throw Exception("User not authenticated properly. Please login again.");
+      }
 
       final storageRef = FirebaseStorage.instance
           .ref()
           .child('profile_pictures')
           .child('$userId.jpg');
+      
+      // Use kIsWeb from flutter/foundation.dart
+      if (kIsWeb) {
+        final bytes = await image.readAsBytes();
+        await storageRef.putData(bytes);
+      } else {
+        await storageRef.putFile(File(image.path));
+      }
 
-      await storageRef.putFile(File(image.path));
       final downloadUrl = await storageRef.getDownloadURL();
 
       await authProvider.updateProfilePicture(downloadUrl);

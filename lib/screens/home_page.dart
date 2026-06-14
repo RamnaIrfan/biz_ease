@@ -1,6 +1,7 @@
 import 'package:biz_ease/models/cart_item.dart';
 import 'package:biz_ease/models/wishlist_model.dart';
 import 'package:flutter/material.dart';
+import 'package:marquee/marquee.dart';
 import 'package:provider/provider.dart';
 import 'cart_provider.dart';
 import 'wishlist_provider.dart';
@@ -18,9 +19,7 @@ import 'recent_provider.dart';
 import 'notification_provider.dart';
 import 'notification_page.dart';
 import 'product_details_page.dart';
-
-// Remove this import since we're not using OrderPage from home
-// import 'order_page.dart';
+import 'support_chat_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -38,8 +37,6 @@ class _HomePageState extends State<HomePage> {
   bool _isShowingRecent = false;
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _categoriesKey = GlobalKey();
-  
-  // Removed hardcoded _allProducts
 
   @override
   void dispose() {
@@ -69,9 +66,20 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: Colors.grey.shade200,
       bottomNavigationBar: _buildBottomNavBar(),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SupportChatPage()),
+          );
+        },
+        backgroundColor: primaryColor,
+        child: const Icon(Icons.support_agent, color: Colors.white, size: 30),
+      ),
       body: SafeArea(
         child: Column(
           children: [
+            _buildMarquee(),
             _buildHeader(),
             Expanded(
               child: (_searchQuery.isNotEmpty || _selectedCategory != null || _isShowingFlashSale || _isShowingRecent)
@@ -182,6 +190,28 @@ class _HomePageState extends State<HomePage> {
             break;
         }
       },
+    );
+  }
+  
+  Widget _buildMarquee() {
+    return Container(
+      width: double.infinity,
+      height: 35, // Fixed height for marquee
+      color: Colors.black, // High contrast for marquee
+      child: Marquee(
+        text: "🚚 FREE SHIPPING ON ORDERS ABOVE RS. 3000! 🛍️ | Use coupon code BIZEASE10 for a 10% discount.",
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
+        scrollAxis: Axis.horizontal,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        blankSpace: 60.0,
+        velocity: 40.0,
+        startPadding: 10.0,
+      ),
     );
   }
 
@@ -466,7 +496,10 @@ Widget _buildSearchResults() {
               ),
               itemCount: products.length,
               itemBuilder: (context, index) {
-                return _buildProductCard(products[index], isDiscounted: _isShowingFlashSale);
+                final product = products[index];
+                final bool showDiscount = _isShowingFlashSale || 
+                    ['Electronics', 'Beauty', 'Fashion', 'Gifts', 'Makeup'].contains(product.category);
+                return _buildProductCard(product, isDiscounted: showDiscount);
               },
             ),
           ),
@@ -568,6 +601,7 @@ Widget _buildSearchResults() {
       {'icon': Icons.card_giftcard, 'name': 'Gifts'},
       {'icon': Icons.shopping_bag, 'name': 'Fashion'},
       {'icon': Icons.spa, 'name': 'Beauty'},
+      {'icon': Icons.brush, 'name': 'Makeup'},
       {'icon': Icons.home, 'name': 'Home'},
       {'icon': Icons.watch, 'name': 'Accessories'},
     ];
@@ -748,12 +782,18 @@ Widget _buildSearchResults() {
                   scrollDirection: Axis.horizontal,
                   itemCount: productsToShow.length,
                   itemBuilder: (context, index) {
+                    final product = productsToShow[index];
+                    // ✅ FIXED: Universal Discount Logic
+                    // Show discount if it's in the Flash Sale section OR if it belongs to sale categories
+                    final bool showDiscount = isFlashSale || 
+                        ['Electronics', 'Beauty', 'Fashion', 'Gifts', 'Makeup'].contains(product.category);
+                    
                     return Container(
                       width: 140,
                       margin: EdgeInsets.only(
                         right: index == productsToShow.length - 1 ? 0 : 12,
                       ),
-                      child: _buildProductCard(productsToShow[index], isDiscounted: isFlashSale),
+                      child: _buildProductCard(product, isDiscounted: showDiscount),
                     );
                   },
                 );
@@ -921,7 +961,7 @@ Widget _buildProductCard(ProductModel product, {bool isDiscounted = false}) {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: product.stock > 0 ? () async {
                       final cartItem = CartItem(
                         id: product.id,
                         ownerId: product.ownerId,
@@ -930,27 +970,47 @@ Widget _buildProductCard(ProductModel product, {bool isDiscounted = false}) {
                         image: product.imageUrl ?? '',
                       );
                       final cart = Provider.of<CartProvider>(context, listen: false);
-                      cart.addToCart(cartItem);
                       
-                      Provider.of<NotificationProvider>(context, listen: false).addNotification(
-                        title: 'Item Added to Cart',
-                        message: '${product.name} has been added to your cart 🛒',
-                        type: 'cart',
+                      // Show loading
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (context) => const Center(child: CircularProgressIndicator()),
                       );
-                      
-                      _showSuccessDialog('${product.name} added to cart', Icons.shopping_cart);
-                    },
+
+                      try {
+                        await cart.addToCart(cartItem);
+                        if (context.mounted) {
+                          Navigator.pop(context); // Remove loader
+                          
+                          Provider.of<NotificationProvider>(context, listen: false).addNotification(
+                            title: 'Item Added to Cart',
+                            message: '${product.name} has been added to your cart 🛒',
+                            type: 'cart',
+                          );
+                          
+                          _showSuccessDialog('${product.name} added to cart', Icons.shopping_cart);
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          Navigator.pop(context); // Remove loader
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to add to cart: $e')),
+                          );
+                        }
+                      }
+                    } : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
+                      backgroundColor: product.stock > 0 ? primaryColor : Colors.grey,
                       padding: const EdgeInsets.symmetric(vertical: 6),
-                      minimumSize: const Size(0, 32), // Slightly reduced from 36
+                      minimumSize: const Size(0, 32),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 2,
+                      elevation: product.stock > 0 ? 2 : 0,
                     ),
-                    child: const Text(
-                      'Add to Cart',
-                      style: TextStyle(
-                        fontSize: 11, // Larger text
+                    child: Text(
+                      product.stock > 0 ? 'Add to Cart' : 'Out of Stock',
+                      style: const TextStyle(
+                        fontSize: 11,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),

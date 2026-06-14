@@ -12,6 +12,9 @@ import '../services/product_service.dart';
 import '../widgets/common_image.dart';
 import '../models/order_model.dart';
 import 'notification_provider.dart';
+import '../services/communication_service.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import '../services/push_notification_service.dart';
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
@@ -26,6 +29,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _contactController = TextEditingController();
+  final TextEditingController _couponController = TextEditingController();
+  bool _isCouponApplied = false;
   String _selectedPaymentMethod = 'Cash on Delivery';
 
   @override
@@ -46,6 +51,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     _emailController.dispose();
     _nameController.dispose();
     _contactController.dispose();
+    _couponController.dispose();
     super.dispose();
   }
 
@@ -81,7 +87,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
             );
           }
 
-          final totalAmount = cart.totalPrice + 200; // Add shipping
+          final double shippingFee = cart.totalPrice >= 3000 ? 0 : 200;
+          final double discount = _isCouponApplied ? (cart.totalPrice * 0.10) : 0;
+          final totalAmount = cart.totalPrice - discount + shippingFee;
           
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -100,9 +108,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 
                 const SizedBox(height: 24),
                 
+                // Coupon Section
+                _buildSectionTitle('Coupon Code'),
+                _buildCouponSection(),
+                
+                const SizedBox(height: 24),
+
                 // Order Summary Section
                 _buildSectionTitle('Order Summary'),
-                _buildOrderSummary(cart, totalAmount),
+                _buildOrderSummary(cart, totalAmount, discount),
                 
                 const SizedBox(height: 32),
                 
@@ -136,7 +150,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           builder: (context) => const Center(child: CircularProgressIndicator()),
                         );
 
+                        // Reload user to get latest email verification status
+                        await authProvider.reloadUser();
+                        if (!authProvider.isEmailVerified) {
+                          if (context.mounted) Navigator.pop(context);
+                          _showError("Please verify your email address to place an order. A verification link has been sent.");
+                          await authProvider.sendEmailVerification();
+                          return;
+                        }
+
                         try {
+                          final String orderNum = _generateOrderNumber();
                           final orderService = OrderService();
                           final productService = ProductService();
                           
@@ -153,9 +177,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             final double subtotal = ownerItems.fold(0.0, (sum, item) => sum + item.totalPrice);
                             
                             // Split shipping cost equally among all owners in this checkout
-                            // (If multiple owners, each gets a fraction of the 200 shipping)
-                            final double splitShipping = 200 / totalOrders;
-                            final double ownerTotalAmount = subtotal + splitShipping;
+                            // (If total >= 3000, shipping is 0)
+                            final double totalShipping = cartProvider.totalPrice >= 3000 ? 0 : 200;
+                            final double splitShipping = totalShipping / totalOrders;
+                            final double discountedSubtotal = _isCouponApplied ? (subtotal * 0.90) : subtotal;
+                            final double ownerTotalAmount = discountedSubtotal + splitShipping;
 
                             final order = OrderModel(
                               id: '', 
@@ -173,24 +199,27 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             );
 
                             await orderService.createOrder(order);
-                            
-                            // Reduce stock for each item in this order
-                            for (var item in ownerItems) {
-                              try {
-                                await productService.reduceStock(item.id, item.quantity);
-                              } catch (e) {
-                                debugPrint('Failed to reduce stock for ${item.id}: $e');
-                              }
-                            }
-                            
                             successfulOrders++;
+                          }
+
+                          // Send confirmation email (Optional)
+                          try {
+                            final commsService = CommunicationService();
+                            await commsService.sendOrderConfirmationEmail(
+                              customerName: _nameController.text,
+                              customerEmail: _emailController.text,
+                              orderNumber: orderNum,
+                              totalAmount: totalAmount,
+                            );
+                          } catch (e) {
+                            debugPrint('Failed to send email confirmation: $e');
                           }
 
                           // Trigger notification
                           if (context.mounted) {
                             Provider.of<NotificationProvider>(context, listen: false).addNotification(
                               title: 'Order Placed',
-                              message: 'Order is placed and is pending. Order #${_generateOrderNumber().substring(0, 8)} 🚚',
+                              message: 'Order is placed and is pending. Order #${orderNum.substring(0, 8)} 🚚',
                               type: 'order',
                             );
                           }
@@ -203,14 +232,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             context,
                             MaterialPageRoute(
                               builder: (context) => OrderPlacedPage(
-                                orderNumber: _generateOrderNumber(),
+                                orderNumber: orderNum,
                                 totalAmount: totalAmount, // Show the overall total to customer
                                 paymentMethod: _selectedPaymentMethod,
                               ),
                             ),
                           ).then((_) {
-                            // Clear cart after navigation
-                            cartProvider.clearCart();
+                            // Clear cart after navigation without returning stock
+                            cartProvider.clearCart(returnStock: false);
                           });
 
                         } catch (e) {
@@ -357,7 +386,64 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  Widget _buildOrderSummary(CartProvider cart, double totalAmount) {
+  Widget _buildCouponSection() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _couponController,
+                decoration: InputDecoration(
+                  hintText: 'Enter coupon code',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  suffixIcon: _isCouponApplied 
+                    ? const Icon(Icons.check_circle, color: Colors.green)
+                    : null,
+                ),
+                enabled: !_isCouponApplied,
+              ),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton(
+              onPressed: _isCouponApplied ? () {
+                setState(() {
+                  _isCouponApplied = false;
+                  _couponController.clear();
+                });
+              } : () {
+                if (_couponController.text.trim().toUpperCase() == 'BIZEASE10') {
+                  setState(() {
+                    _isCouponApplied = true;
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Coupon applied successfully! 10% discount added.'), backgroundColor: Colors.green)
+                  );
+                } else {
+                  _showError('Invalid coupon code');
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _isCouponApplied ? Colors.red : primaryColor,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              ),
+              child: Text(_isCouponApplied ? 'Remove' : 'Apply', style: const TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOrderSummary(CartProvider cart, double totalAmount, double discount) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -407,8 +493,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
             
             // Price Breakdown
             _buildPriceRow('Subtotal', 'Rs. ${_formatPrice(cart.totalPrice)}'),
+            if (_isCouponApplied) ...[
+              const SizedBox(height: 8),
+              _buildPriceRow('Discount (10%)', '- Rs. ${_formatPrice(discount)}', valueColor: Colors.red),
+            ],
             const SizedBox(height: 8),
-            _buildPriceRow('Shipping', 'Rs. 200'),
+            _buildPriceRow(
+              'Shipping', 
+              cart.totalPrice >= 3000 ? 'FREE' : 'Rs. 200',
+              valueColor: cart.totalPrice >= 3000 ? Colors.green : Colors.black87,
+            ),
             const SizedBox(height: 12),
             const Divider(height: 24),
             
@@ -426,12 +520,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  Widget _buildPriceRow(String label, String value) {
+  Widget _buildPriceRow(String label, String value, {Color valueColor = Colors.black87}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: TextStyle(color: Colors.grey.shade600)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+        Text(
+          value, 
+          style: TextStyle(fontWeight: FontWeight.w500, color: valueColor),
+        ),
       ],
     );
   }
@@ -449,8 +546,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       _showError('Please enter your name');
       return false;
     }
-    if (_contactController.text.isEmpty) {
-      _showError('Please enter your contact number');
+    if (_contactController.text.isEmpty || _contactController.text.length < 10) {
+      _showError('Please enter a valid contact number (at least 10 digits)');
       return false;
     }
     return true;

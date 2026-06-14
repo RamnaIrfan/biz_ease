@@ -10,6 +10,7 @@ import '../widgets/common_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../services/storage_service.dart';
 import '../services/ai_service.dart';
+import '../services/marketing_agent_service.dart';
 
 class AddNewProductPage extends StatefulWidget {
   final ProductModel? product;
@@ -28,6 +29,8 @@ class _AddNewProductPageState extends State<AddNewProductPage> {
   String? _imagePath;
   bool _isUploading = false;
   bool _isGeneratingDescription = false;
+  bool _autoPostToSocial = false;
+  bool _isGeneratingMarketing = false;
 
   bool _isSaving = false;
   late String _productId;
@@ -40,6 +43,7 @@ class _AddNewProductPageState extends State<AddNewProductPage> {
     'Home & Garden',
     'Books',
     'Beauty',
+    'Makeup',
     'Fashion',
     'Other'
   ];
@@ -378,6 +382,40 @@ class _AddNewProductPageState extends State<AddNewProductPage> {
                       ),
                 ),
               ),
+
+              const SizedBox(height: 16),
+
+              // Agentic Marketing Toggle
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: orange.withAlpha(50)),
+                ),
+                child: SwitchListTile(
+                  title: const Text(
+                    'AI Marketing Agency',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text(
+                    'Automatically design & post to Instagram, FB, and TikTok',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  secondary: const Icon(Icons.auto_awesome, color: orange),
+                  value: _autoPostToSocial,
+                  activeColor: orange,
+                  onChanged: (val) {
+                    setState(() {
+                      _autoPostToSocial = val;
+                    });
+                  },
+                ),
+              ),
+              if (_isGeneratingMarketing)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: LinearProgressIndicator(color: orange),
+                ),
             ],
           ),
         ),
@@ -468,6 +506,42 @@ class _AddNewProductPageState extends State<AddNewProductPage> {
       } else {
         await productService.createProduct(product);
       }
+
+      // --- START AGENTIC MARKETING LOGIC ---
+      if (_autoPostToSocial && context.mounted) {
+        setState(() => _isGeneratingMarketing = true);
+        try {
+          final agent = MarketingAgentService();
+          // Generate the campaign
+          final campaign = await agent.generateAndReviewCampaign(
+            product: product,
+            instructions: "Create a viral launch campaign for my new product.",
+            platforms: ['Instagram', 'Facebook', 'TikTok'],
+          );
+          
+          // In a real app, you might show a preview here. 
+          // For now, we auto-post as requested for the "Automatic" flow.
+          await agent.postCampaign(
+            product: product,
+            campaignData: campaign,
+            platforms: ['instagram', 'facebook', 'tiktok'],
+          );
+          
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('AI Agent: Marketing campaign designed and posted! 🚀'),
+                backgroundColor: Colors.blue,
+              ),
+            );
+          }
+        } catch (e) {
+          debugPrint('Agentic Marketing Failed: $e');
+        } finally {
+          if (mounted) setState(() => _isGeneratingMarketing = false);
+        }
+      }
+      // --- END AGENTIC MARKETING LOGIC ---
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

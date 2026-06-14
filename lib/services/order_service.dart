@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/order_model.dart';
+import 'email_service.dart';
+import 'communication_service.dart';
 
 class OrderService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -9,20 +11,55 @@ class OrderService {
   Future<String> createOrder(OrderModel order) async {
     try {
       DocumentReference docRef = await _firestore.collection(_collection).add(order.toMap());
+      
+      // 📧 Send confirmation email to customer
+      EmailService().sendOrderConfirmation(order.copyWith(id: docRef.id));
+
+      // 🤖 Send automated WhatsApp notification
+      if (order.phoneNumber != null && order.phoneNumber!.isNotEmpty) {
+        CommunicationService().sendAutomatedWhatsAppOrder(
+          orderId: docRef.id,
+          phoneNumber: order.phoneNumber!,
+          customerName: order.customerName,
+          totalAmount: order.totalAmount,
+          items: order.items,
+        );
+      }
+      
       return docRef.id;
     } catch (e) {
       throw 'Failed to create order: $e';
     }
   }
 
-  // Get order by ID
+  // Get order by ID (Supports full ID and 8-character short ID from UI, case-insensitive)
   Future<OrderModel?> getOrder(String orderId) async {
     try {
-      DocumentSnapshot doc = await _firestore.collection(_collection).doc(orderId).get();
+      String cleanId = orderId.trim();
+      if (cleanId.startsWith('#')) {
+        cleanId = cleanId.substring(1).trim();
+      }
       
+      if (cleanId.isEmpty) return null;
+
+      // 1. Try exact match first
+      DocumentSnapshot doc = await _firestore.collection(_collection).doc(cleanId).get();
       if (doc.exists) {
         return OrderModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
       }
+      
+      // 2. Fallback to case-insensitive and short ID (e.g. first 8 chars) match
+      final target = cleanId.toLowerCase();
+      final QuerySnapshot snapshot = await _firestore.collection(_collection).get();
+      
+      for (var d in snapshot.docs) {
+        final docId = d.id.toLowerCase();
+        // Match if clean target matches full doc ID case-insensitively, or matches the first 8 characters
+        if (docId == target || docId.startsWith(target) || (target.length >= 8 && docId.startsWith(target.substring(0, 8)))) {
+          return OrderModel.fromMap(d.data() as Map<String, dynamic>, d.id);
+        }
+      }
+      
       return null;
     } catch (e) {
       throw 'Failed to get order: $e';
@@ -123,6 +160,12 @@ class OrderService {
       }
 
       await _firestore.collection(_collection).doc(orderId).update(updateData);
+
+      // Trigger email notification to customer
+      final updatedOrder = await getOrder(orderId);
+      if (updatedOrder != null) {
+        EmailService().sendOrderStatusUpdate(updatedOrder);
+      }
     } catch (e) {
       throw 'Failed to update order status: $e';
     }

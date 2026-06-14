@@ -27,29 +27,31 @@ class OwnerOrdersPage extends StatelessWidget {
         title: const Text("Manage Orders"),
         backgroundColor: primaryColor,
       ),
-      body: StreamBuilder<List<OrderModel>>(
-        stream: OrderService().getOwnerOrders(ownerId),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}"));
-          }
-          final orders = snapshot.data ?? [];
-          if (orders.isEmpty) {
-            return const Center(child: Text("No orders found"));
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: orders.length,
-            itemBuilder: (context, index) {
-              final order = orders[index];
-              return _OrderManagementCard(order: order);
-            },
-          );
-        },
+      body: SelectionArea(
+        child: StreamBuilder<List<OrderModel>>(
+          stream: OrderService().getOwnerOrders(ownerId),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(child: Text("Error: ${snapshot.error}"));
+            }
+            final orders = snapshot.data ?? [];
+            if (orders.isEmpty) {
+              return const Center(child: Text("No orders found"));
+            }
+  
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: orders.length,
+              itemBuilder: (context, index) {
+                final order = orders[index];
+                return _OrderManagementCard(order: order);
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -166,6 +168,7 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     Color color;
     switch (status) {
+      case OrderStatus.pending_confirmation: color = Colors.orange; break;
       case OrderStatus.pending: color = Colors.orange; break;
       case OrderStatus.processing: color = Colors.blue; break;
       case OrderStatus.confirmed: color = Colors.indigo; break;

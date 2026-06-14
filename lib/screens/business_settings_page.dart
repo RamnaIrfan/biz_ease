@@ -18,6 +18,7 @@ class _BusinessSettingsPageState extends State<BusinessSettingsPage> {
   late TextEditingController _phoneController;
   late TextEditingController _addressController;
   bool _isLoading = false;
+  bool _emailAlertsEnabled = true;
 
   final Color primaryColor = const Color(0xFFD88A1F);
 
@@ -29,6 +30,7 @@ class _BusinessSettingsPageState extends State<BusinessSettingsPage> {
     _emailController = TextEditingController(text: widget.owner.email);
     _phoneController = TextEditingController(text: widget.owner.phone);
     _addressController = TextEditingController(text: widget.owner.address);
+    _emailAlertsEnabled = widget.owner.emailAlertsEnabled;
   }
 
   @override
@@ -55,6 +57,7 @@ class _BusinessSettingsPageState extends State<BusinessSettingsPage> {
         phone: _phoneController.text.trim(),
         address: _addressController.text.trim(),
         category: widget.owner.category,
+        emailAlertsEnabled: _emailAlertsEnabled,
       );
 
       await OwnerService().updateOwner(updatedOwner);
@@ -101,6 +104,18 @@ class _BusinessSettingsPageState extends State<BusinessSettingsPage> {
                     _buildTextField(_phoneController, 'Phone Number', Icons.phone, keyboardType: TextInputType.phone),
                     const SizedBox(height: 16),
                     _buildTextField(_addressController, 'Business Address', Icons.location_on, maxLines: 3),
+                    const SizedBox(height: 16),
+                    SwitchListTile(
+                      title: const Text('Low Stock Email Alerts'),
+                      subtitle: const Text('Receive emails when product stock is low or empty'),
+                      value: _emailAlertsEnabled,
+                      activeColor: primaryColor,
+                      onChanged: (value) {
+                        setState(() {
+                          _emailAlertsEnabled = value;
+                        });
+                      },
+                    ),
                     const SizedBox(height: 32),
                     ElevatedButton(
                       onPressed: _saveChanges,

@@ -10,6 +10,7 @@ class ProductModel {
   final String description;
   final String? imageUrl;
   final DateTime createdAt;
+  final int? lastAlertedStock;
 
   ProductModel({
     required this.id,
@@ -21,6 +22,7 @@ class ProductModel {
     required this.description,
     this.imageUrl,
     required this.createdAt,
+    this.lastAlertedStock,
   });
 
   Map<String, dynamic> toMap() {
@@ -34,6 +36,7 @@ class ProductModel {
       'description': description,
       'imageUrl': imageUrl,
       'createdAt': Timestamp.fromDate(createdAt),
+      'lastAlertedStock': lastAlertedStock,
     };
   }
 
@@ -48,6 +51,7 @@ class ProductModel {
       description: map['description'] ?? '',
       imageUrl: map['imageUrl'],
       createdAt: (map['createdAt'] as Timestamp).toDate(),
+      lastAlertedStock: map['lastAlertedStock'],
     );
   }
 
@@ -61,6 +65,7 @@ class ProductModel {
     String? description,
     String? imageUrl,
     DateTime? createdAt,
+    int? lastAlertedStock,
   }) {
     return ProductModel(
       id: id ?? this.id,
@@ -72,6 +77,17 @@ class ProductModel {
       description: description ?? this.description,
       imageUrl: imageUrl ?? this.imageUrl,
       createdAt: createdAt ?? this.createdAt,
+      lastAlertedStock: lastAlertedStock ?? this.lastAlertedStock,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProductModel &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

@@ -47,6 +47,7 @@ class NotificationProvider with ChangeNotifier {
     required String title,
     required String message,
     required String type,
+    Map<String, dynamic>? metadata,
   }) async {
     if (_userId != null) {
       await _notificationService.createNotification(
@@ -54,6 +55,7 @@ class NotificationProvider with ChangeNotifier {
         title: title,
         message: message,
         type: type,
+        metadata: metadata,
       );
     }
   }

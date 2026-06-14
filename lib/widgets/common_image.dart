@@ -31,6 +31,8 @@ class CommonImage extends StatelessWidget {
         width: width,
         height: height,
         fit: fit,
+        filterQuality: FilterQuality.high,
+        isAntiAlias: true,
         errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
       );
     }
@@ -42,6 +44,8 @@ class CommonImage extends StatelessWidget {
         width: width,
         height: height,
         fit: fit,
+        filterQuality: FilterQuality.high,
+        isAntiAlias: true,
         errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
       );
     }
@@ -69,6 +73,8 @@ class CommonImage extends StatelessWidget {
       width: width,
       height: height,
       fit: fit,
+      filterQuality: FilterQuality.high,
+      isAntiAlias: true,
       errorBuilder: (context, error, stackTrace) {
         debugPrint('CommonImage error for path $cleanPath: $error');
         return _buildPlaceholder();

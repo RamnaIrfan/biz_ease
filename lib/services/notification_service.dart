@@ -78,6 +78,7 @@ class NotificationService {
     required String title,
     required String message,
     required String type,
+    Map<String, dynamic>? metadata,
   }) async {
     final notification = NotificationModel(
       id: '',
@@ -85,6 +86,7 @@ class NotificationService {
       title: title,
       message: message,
       type: type,
+      metadata: metadata,
       createdAt: DateTime.now(),
     );
     await addNotification(notification);
