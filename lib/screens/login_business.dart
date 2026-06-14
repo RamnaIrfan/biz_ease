@@ -222,7 +222,7 @@ class _LoginBusinessPageState extends State<LoginBusinessPage> {
                 onPressed: isVerifying ? null : () {
                   // User cancelled, sign them out
                   final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                  authProvider.signOut();
+                  authProvider.logout();
                   Navigator.pop(context);
                 },
                 child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
